@@ -3,6 +3,8 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import CameraStage from './CameraStage';
 import { LandmarkerError } from '../cv/landmarker';
+import { POSE_LANDMARK_COUNT } from '../cv/types';
+import type { PoseFrame } from '../cv/types';
 
 /**
  * The real module pulls in the MediaPipe WASM runtime, which jsdom cannot host.
@@ -29,13 +31,86 @@ function fakeStream() {
   return { stream, track };
 }
 
+/** A frame of pose data — landmark values are irrelevant, arrival is the point. */
+function fakeFrame(timestampMs = 0): PoseFrame {
+  const points = Array.from({ length: POSE_LANDMARK_COUNT }, () => ({
+    x: 0.5,
+    y: 0.5,
+    z: 0,
+    visibility: 1,
+  }));
+  return { screen: points, world: points, timestampMs };
+}
+
+/** A 2D context stub — jsdom has no canvas backend at all. */
+function stubCanvasContext() {
+  const context = {
+    setTransform: vi.fn(),
+    clearRect: vi.fn(),
+    save: vi.fn(),
+    restore: vi.fn(),
+    beginPath: vi.fn(),
+    moveTo: vi.fn(),
+    lineTo: vi.fn(),
+    arc: vi.fn(),
+    stroke: vi.fn(),
+    fill: vi.fn(),
+    lineWidth: 1,
+    lineCap: 'butt',
+    lineJoin: 'miter',
+    strokeStyle: '',
+    fillStyle: '',
+  };
+  HTMLCanvasElement.prototype.getContext = vi
+    .fn()
+    .mockReturnValue(context) as unknown as HTMLCanvasElement['getContext'];
+  return context;
+}
+
+/**
+ * Replaces the animation-frame clock so the detection loop can be stepped a
+ * frame at a time — the throttle is defined in milliseconds, and a test that
+ * waited on the real one would be both slow and flaky.
+ */
+function driveAnimationFrames() {
+  let pending: FrameRequestCallback | null = null;
+  let now = 0;
+
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+    pending = callback;
+    return 1;
+  });
+  vi.stubGlobal('cancelAnimationFrame', () => {
+    pending = null;
+  });
+  vi.spyOn(performance, 'now').mockImplementation(() => now);
+
+  return {
+    /** Runs `count` animation frames `stepMs` apart. */
+    advance(count: number, stepMs: number) {
+      for (let i = 0; i < count; i += 1) {
+        now += stepMs;
+        const callback = pending;
+        pending = null;
+        callback?.(now);
+      }
+    },
+  };
+}
+
 beforeAll(() => {
-  // jsdom implements neither of these on HTMLMediaElement.
+  // jsdom implements none of these — no media pipeline, and no layout, so a
+  // canvas would otherwise report a 0x0 box and never be drawn into.
   Object.defineProperty(HTMLMediaElement.prototype, 'srcObject', {
     writable: true,
     value: null,
   });
   HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(HTMLVideoElement.prototype, 'readyState', { value: 4 });
+  Object.defineProperty(HTMLVideoElement.prototype, 'videoWidth', { value: 1280 });
+  Object.defineProperty(HTMLVideoElement.prototype, 'videoHeight', { value: 720 });
+  Object.defineProperty(HTMLCanvasElement.prototype, 'clientWidth', { value: 640 });
+  Object.defineProperty(HTMLCanvasElement.prototype, 'clientHeight', { value: 360 });
 });
 
 beforeEach(() => {
@@ -52,6 +127,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 async function startCamera() {
@@ -170,5 +246,92 @@ describe('CameraStage', () => {
     await startCamera();
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/failed to start/i);
+  });
+});
+
+describe('CameraStage detection loop', () => {
+  beforeEach(() => {
+    const { stream } = fakeStream();
+    getUserMedia.mockResolvedValue(stream);
+  });
+
+  it('reports every detected frame and draws the skeleton over the video', async () => {
+    const detect = vi.fn(() => fakeFrame());
+    getPoseDetector.mockResolvedValue({ detect });
+    const context = stubCanvasContext();
+    const clock = driveAnimationFrames();
+    const onFrame = vi.fn();
+
+    render(<CameraStage onFrame={onFrame} />);
+    await startCamera();
+    await screen.findByRole('button', { name: /stop camera/i });
+
+    clock.advance(4, 100);
+
+    expect(detect).toHaveBeenCalledTimes(4);
+    expect(onFrame).toHaveBeenCalledTimes(4);
+    expect(context.stroke).toHaveBeenCalled();
+    // Registration: the canvas is drawn in CSS pixels, scaled by the ratio
+    // between its backing store and its box.
+    expect(context.setTransform).toHaveBeenLastCalledWith(1, 0, 0, 1, 0, 0);
+  });
+
+  it('throttles inference well below the animation frame rate', async () => {
+    const detect = vi.fn(() => fakeFrame());
+    getPoseDetector.mockResolvedValue({ detect });
+    stubCanvasContext();
+    const clock = driveAnimationFrames();
+
+    render(<CameraStage />);
+    await startCamera();
+    await screen.findByRole('button', { name: /stop camera/i });
+
+    // One second of 60 Hz frames.
+    clock.advance(60, 1000 / 60);
+
+    expect(detect.mock.calls.length).toBeGreaterThanOrEqual(20);
+    expect(detect.mock.calls.length).toBeLessThanOrEqual(24);
+  });
+
+  it('clears the overlay when the referee leaves the frame', async () => {
+    const detect = vi.fn<() => PoseFrame | null>(() => fakeFrame());
+    getPoseDetector.mockResolvedValue({ detect });
+    const context = stubCanvasContext();
+    const clock = driveAnimationFrames();
+
+    render(<CameraStage />);
+    await startCamera();
+    await screen.findByRole('button', { name: /stop camera/i });
+
+    clock.advance(1, 100);
+    expect(context.clearRect).toHaveBeenCalledTimes(1);
+
+    // Tracking lost: the last skeleton must be wiped rather than left frozen
+    // over a body that has moved on.
+    detect.mockReturnValue(null);
+    clock.advance(1, 100);
+    expect(context.clearRect).toHaveBeenCalledTimes(2);
+
+    // With nothing drawn, further empty frames do no canvas work at all.
+    clock.advance(2, 100);
+    expect(context.clearRect).toHaveBeenCalledTimes(2);
+  });
+
+  it('leaves the canvas alone when the skeleton is switched off', async () => {
+    const detect = vi.fn(() => fakeFrame());
+    getPoseDetector.mockResolvedValue({ detect });
+    const context = stubCanvasContext();
+    const clock = driveAnimationFrames();
+    const onFrame = vi.fn();
+
+    render(<CameraStage showSkeleton={false} onFrame={onFrame} />);
+    await startCamera();
+    await screen.findByRole('button', { name: /stop camera/i });
+
+    clock.advance(4, 100);
+
+    expect(onFrame).toHaveBeenCalledTimes(4);
+    expect(context.stroke).not.toHaveBeenCalled();
+    expect(HTMLCanvasElement.prototype.getContext).not.toHaveBeenCalled();
   });
 });

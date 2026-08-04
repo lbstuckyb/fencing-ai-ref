@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { getPoseDetector, LandmarkerError } from '../cv/landmarker';
+import { createFrameLimiter } from '../cv/loop';
+import { drawSkeleton, SKELETON_COLORS, syncCanvasSize } from '../cv/skeleton';
 import type { PoseFrame } from '../cv/types';
 
 /**
@@ -119,17 +121,25 @@ export interface CameraStageProps {
    */
   onFrame?: (frame: PoseFrame) => void;
   /**
-   * Absolutely-positioned content layered over the video — the skeleton canvas
-   * from stage 5, prompts and progress rings later. Rendered inside the mirrored
-   * frame's box but *not* mirrored itself, so text stays readable.
+   * Absolutely-positioned content layered over the video — prompts, progress
+   * rings. Drawn above the skeleton, inside the mirrored frame's box but *not*
+   * mirrored itself, so text stays readable.
    */
   overlay?: ReactNode;
+  /** Draw the tracked skeleton over the video. On by default. */
+  showSkeleton?: boolean;
   /** Extra controls shown alongside the stop button while running. */
   children?: ReactNode;
 }
 
-export default function CameraStage({ onFrame, overlay, children }: CameraStageProps) {
+export default function CameraStage({
+  onFrame,
+  overlay,
+  showSkeleton = true,
+  children,
+}: CameraStageProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
   /**
@@ -149,12 +159,14 @@ export default function CameraStage({ onFrame, overlay, children }: CameraStageP
    */
   const [stats, setStats] = useState({ fps: 0, detections: 0, landmarks: 0 });
 
-  // Kept in a ref so the detection loop never has to be torn down and rebuilt
-  // when a parent re-renders with a fresh callback identity.
+  // Kept in refs so the detection loop never has to be torn down and rebuilt
+  // when a parent re-renders with a fresh callback identity or toggles a flag.
   const onFrameRef = useRef(onFrame);
+  const showSkeletonRef = useRef(showSkeleton);
   useEffect(() => {
     onFrameRef.current = onFrame;
-  }, [onFrame]);
+    showSkeletonRef.current = showSkeleton;
+  }, [onFrame, showSkeleton]);
 
   const releaseStream = useCallback(() => {
     if (rafRef.current !== null) {
@@ -256,20 +268,54 @@ export default function CameraStage({ onFrame, overlay, children }: CameraStageP
 
     setPhase('running');
 
-    // Detection loop. Stage 5 throttles this to ~20–24 fps and draws the
-    // skeleton; for now it runs per animation frame so the readout below proves
-    // landmarks are arriving.
-    let ticks = 0;
+    // Detection loop. It runs per animation frame so the overlay stays in step
+    // with the compositor, but inference itself is gated to ~20–24 fps — see
+    // cv/loop.ts for why that is enough for a held signal.
+    const allowDetection = createFrameLimiter();
+
+    let attempts = 0;
     let detections = 0;
     let landmarks = 0;
     let windowStart = performance.now();
+
+    /**
+     * Acquired lazily and cached: a page that never sees a pose never pays for
+     * a 2D context, and jsdom — which has no canvas backend — is never asked
+     * for one during component tests.
+     */
+    let ctx: CanvasRenderingContext2D | null | undefined;
+    let painted = false;
+
+    const paint = (frame: PoseFrame | null) => {
+      const canvas = canvasRef.current;
+      // Nothing drawn and nothing to draw: skip before touching the canvas.
+      if (!canvas || (!frame && !painted)) return;
+
+      ctx ??= canvas.getContext('2d');
+      if (!ctx) return;
+
+      const size = syncCanvasSize(canvas, window.devicePixelRatio);
+      if (!size) return;
+
+      const ratio = canvas.width / size.width;
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      ctx.clearRect(0, 0, size.width, size.height);
+      painted = frame
+        ? drawSkeleton(ctx, frame.screen, {
+            source: { width: video.videoWidth, height: video.videoHeight },
+            dest: size,
+            mirror: true,
+          })
+        : false;
+    };
 
     const tick = () => {
       if (superseded()) return;
       rafRef.current = requestAnimationFrame(tick);
 
       const now = performance.now();
-      ticks += 1;
+      if (!allowDetection(now)) return;
+      attempts += 1;
 
       const frame = detector.detect(video, now);
       if (frame) {
@@ -277,18 +323,19 @@ export default function CameraStage({ onFrame, overlay, children }: CameraStageP
         landmarks = frame.world.length;
         onFrameRef.current?.(frame);
       }
+      if (showSkeletonRef.current) paint(frame);
 
       const elapsed = now - windowStart;
       if (elapsed >= 1000) {
         const scale = 1000 / elapsed;
         setStats({
-          fps: Math.round(ticks * scale),
+          fps: Math.round(attempts * scale),
           detections: Math.round(detections * scale),
           // Falls back to 0 when tracking is lost, so the readout cannot go on
           // reporting a stale 33 after the referee walks out of frame.
           landmarks: detections > 0 ? landmarks : 0,
         });
-        ticks = 0;
+        attempts = 0;
         detections = 0;
         windowStart = now;
       }
@@ -323,6 +370,16 @@ export default function CameraStage({ onFrame, overlay, children }: CameraStageP
 
         {running ? (
           <>
+            {showSkeleton ? (
+              // Sized by CSS and drawn in CSS pixels; the mirroring is done in
+              // the projection rather than with a transform here, so anything
+              // drawn on this layer later is not written backwards.
+              <canvas
+                ref={canvasRef}
+                aria-hidden
+                className="pointer-events-none absolute inset-0 h-full w-full"
+              />
+            ) : null}
             <div className="pointer-events-none absolute inset-0">{overlay}</div>
             <p className="absolute left-2 top-2 rounded bg-black/60 px-2 py-1 font-mono text-xs text-white">
               {stats.fps} fps ·{' '}
@@ -330,6 +387,30 @@ export default function CameraStage({ onFrame, overlay, children }: CameraStageP
                 ? `${stats.landmarks} landmarks @ ${stats.detections}/s`
                 : 'no pose in frame'}
             </p>
+            {showSkeleton ? (
+              // The mirror check, in the corner where it is cheap to glance at:
+              // raise your right arm and the cyan limb must be the one that
+              // moves. Sides are anatomical everywhere in this app, and a
+              // silently inverted one would wreck every directional signal.
+              <p className="absolute bottom-2 left-2 flex items-center gap-3 rounded bg-black/60 px-2 py-1 text-xs text-white">
+                <span className="flex items-center gap-1.5">
+                  <span
+                    aria-hidden
+                    className="h-2 w-2 rounded-full"
+                    style={{ backgroundColor: SKELETON_COLORS.right }}
+                  />
+                  your right
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span
+                    aria-hidden
+                    className="h-2 w-2 rounded-full"
+                    style={{ backgroundColor: SKELETON_COLORS.left }}
+                  />
+                  your left
+                </span>
+              </p>
+            ) : null}
           </>
         ) : null}
 

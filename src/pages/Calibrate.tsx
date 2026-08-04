@@ -41,13 +41,14 @@ export default function Calibrate() {
       <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">
         The view is mirrored, as a referee practising in front of a screen expects. Sides are read
         from anatomy rather than screen position, so a signal made with your right arm is graded as
-        a right-arm signal wherever it appears in the frame.
+        a right-arm signal wherever it appears in the frame. Check it now: raise your right arm, and
+        the limb the overlay draws in cyan is the one that should move.
       </p>
 
       <div className="mt-6">
         <ComingSoon stage="8">
-          The camera and pose detection run here now. The joint-angle readouts still need the
-          geometry primitives and the hand-shape classifier.
+          The camera, pose detection and skeleton overlay run here now. The joint-angle readouts
+          still need the geometry primitives and the hand-shape classifier.
         </ComingSoon>
       </div>
     </>
