@@ -5,8 +5,10 @@ coverage
 *.local
 .DS_Store
 
-# Vendored MediaPipe model assets (stage 4) — large binaries, fetched by script
+# Vendored MediaPipe assets (stage 4) — large binaries, reproduced by
+# `npm run fetch-assets` (which also runs on postinstall)
 public/models/*.task
+public/mediapipe/
 
 # Scenario clips (stage 15) — dropped in locally, not committed
 public/scenarios/*.mp4
