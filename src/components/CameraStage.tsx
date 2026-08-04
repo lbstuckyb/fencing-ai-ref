@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { getPoseDetector, LandmarkerError } from '../cv/landmarker';
+import { getHandDetector, getPoseDetector, LandmarkerError } from '../cv/landmarker';
+import type { HandDetector } from '../cv/landmarker';
 import { createFrameLimiter } from '../cv/loop';
 import { drawSkeleton, SKELETON_COLORS, syncCanvasSize } from '../cv/skeleton';
-import type { PoseFrame } from '../cv/types';
+import type { HandFrame, PoseFrame } from '../cv/types';
 
 /**
  * Camera + pose detection surface, shared by every drill page.
@@ -118,8 +119,18 @@ export interface CameraStageProps {
   /**
    * Called once per detected frame. `null` frames are not reported — a page
    * that needs to know detection dropped out should track the timestamp.
+   *
+   * `hands` is `null` unless `needsHands` is set and the hand model is loaded;
+   * an *empty* hand frame is a different thing, and means no hands were in shot.
    */
-  onFrame?: (frame: PoseFrame) => void;
+  onFrame?: (frame: PoseFrame, hands: HandFrame | null) => void;
+  /**
+   * Run the hand landmarker as well, for the signals whose spec sets
+   * `needsHands` — Halt, Point in line, Nothing. It is a second model and
+   * roughly doubles the per-frame cost, so the other seven signals leave it off.
+   * Safe to toggle mid-session: the model loads on demand and stays loaded.
+   */
+  needsHands?: boolean;
   /**
    * Absolutely-positioned content layered over the video — prompts, progress
    * rings. Drawn above the skeleton, inside the mirrored frame's box but *not*
@@ -134,6 +145,7 @@ export interface CameraStageProps {
 
 export default function CameraStage({
   onFrame,
+  needsHands = false,
   overlay,
   showSkeleton = true,
   children,
@@ -157,16 +169,26 @@ export default function CameraStage({
    * pose — separating them is what distinguishes "the loop has died" from "the
    * loop is fine, nobody is in shot", which look identical on a single counter.
    */
-  const [stats, setStats] = useState({ fps: 0, detections: 0, landmarks: 0 });
+  const [stats, setStats] = useState({ fps: 0, detections: 0, landmarks: 0, hands: 0 });
+  /**
+   * Set when a `needsHands` drill asked for finger detail and the model would
+   * not load. Not a full failure: pose keeps running, so arm geometry still
+   * grades and the user is told which part is missing rather than losing the
+   * whole camera over it.
+   */
+  const [handsUnavailable, setHandsUnavailable] = useState(false);
 
   // Kept in refs so the detection loop never has to be torn down and rebuilt
   // when a parent re-renders with a fresh callback identity or toggles a flag.
   const onFrameRef = useRef(onFrame);
   const showSkeletonRef = useRef(showSkeleton);
+  const needsHandsRef = useRef(needsHands);
+  const handDetectorRef = useRef<HandDetector | null>(null);
   useEffect(() => {
     onFrameRef.current = onFrame;
     showSkeletonRef.current = showSkeleton;
-  }, [onFrame, showSkeleton]);
+    needsHandsRef.current = needsHands;
+  }, [onFrame, showSkeleton, needsHands]);
 
   const releaseStream = useCallback(() => {
     if (rafRef.current !== null) {
@@ -186,7 +208,7 @@ export default function CameraStage({
     releaseStream();
     setPhase('idle');
     setFailure(null);
-    setStats({ fps: 0, detections: 0, landmarks: 0 });
+    setStats({ fps: 0, detections: 0, landmarks: 0, hands: 0 });
   }, [releaseStream]);
 
   const fail = useCallback(
@@ -204,6 +226,7 @@ export default function CameraStage({
     const superseded = () => runRef.current !== run;
 
     setFailure(null);
+    setHandsUnavailable(false);
     setPhase('starting');
 
     if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
@@ -276,6 +299,7 @@ export default function CameraStage({
     let attempts = 0;
     let detections = 0;
     let landmarks = 0;
+    let hands = 0;
     let windowStart = performance.now();
 
     /**
@@ -321,7 +345,16 @@ export default function CameraStage({
       if (frame) {
         detections += 1;
         landmarks = frame.world.length;
-        onFrameRef.current?.(frame);
+
+        // Hands are gated on a pose: they cost a second inference, and their
+        // sides are resolved against the pose's wrists, so a frame with nobody
+        // in it has nothing to spend that on.
+        const handDetector = handDetectorRef.current;
+        const handFrame =
+          needsHandsRef.current && handDetector ? handDetector.detect(video, now, frame) : null;
+        hands = handFrame?.hands.length ?? 0;
+
+        onFrameRef.current?.(frame, handFrame);
       }
       if (showSkeletonRef.current) paint(frame);
 
@@ -334,6 +367,7 @@ export default function CameraStage({
           // Falls back to 0 when tracking is lost, so the readout cannot go on
           // reporting a stale 33 after the referee walks out of frame.
           landmarks: detections > 0 ? landmarks : 0,
+          hands: detections > 0 ? hands : 0,
         });
         attempts = 0;
         detections = 0;
@@ -343,6 +377,33 @@ export default function CameraStage({
 
     rafRef.current = requestAnimationFrame(tick);
   }, [fail]);
+
+  /**
+   * Loads the hand model the first time a drill actually needs it.
+   *
+   * Deliberately not part of `start`: a practice session moves between signals,
+   * and only three of the ten want finger detail. Loading here means the 7.8 MB
+   * model is fetched when the first such signal comes up and never for a session
+   * that skips them — while still being ready before the drill that asked for it
+   * has produced a single gradeable frame.
+   */
+  useEffect(() => {
+    if (!needsHands || phase !== 'running' || handDetectorRef.current) return;
+
+    let cancelled = false;
+    getHandDetector().then(
+      (detector) => {
+        if (!cancelled) handDetectorRef.current = detector;
+      },
+      (error) => {
+        console.error('[camera] hand detector failed to load', error);
+        if (!cancelled) setHandsUnavailable(true);
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [needsHands, phase]);
 
   // Unmount is the one path that must always release the device — navigating
   // away from a drill page has to turn the camera light off.
@@ -386,7 +447,18 @@ export default function CameraStage({
               {stats.detections > 0
                 ? `${stats.landmarks} landmarks @ ${stats.detections}/s`
                 : 'no pose in frame'}
+              {needsHands ? ` · ${stats.hands} hand${stats.hands === 1 ? '' : 's'}` : ''}
             </p>
+
+            {handsUnavailable ? (
+              <p
+                role="status"
+                className="absolute right-2 top-2 max-w-56 rounded bg-amber-900/80 px-2 py-1 text-xs text-amber-50"
+              >
+                Hand detail is unavailable — the hand model did not load. Arm geometry still grades;
+                run <code>npm run fetch-assets</code>.
+              </p>
+            ) : null}
             {showSkeleton ? (
               // The mirror check, in the corner where it is cheap to glance at:
               // raise your right arm and the cyan limb must be the one that

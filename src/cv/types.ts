@@ -102,6 +102,110 @@ export type PoseLandmarkIndex = (typeof POSE)[keyof typeof POSE];
 
 export const POSE_LANDMARK_COUNT = 33;
 
+/* -------------------------------------------------------------------------- */
+/* Hands                                                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * MediaPipe's 21 hand landmarks, by index.
+ *
+ * Each finger is a four-link chain from the palm outward: MCP (knuckle), PIP,
+ * DIP, TIP. The thumb has no PIP — its chain is CMC, MCP, IP, TIP — which is why
+ * it never fits the same extension test as the other four.
+ */
+export const HAND = {
+  WRIST: 0,
+  THUMB_CMC: 1,
+  THUMB_MCP: 2,
+  THUMB_IP: 3,
+  THUMB_TIP: 4,
+  INDEX_MCP: 5,
+  INDEX_PIP: 6,
+  INDEX_DIP: 7,
+  INDEX_TIP: 8,
+  MIDDLE_MCP: 9,
+  MIDDLE_PIP: 10,
+  MIDDLE_DIP: 11,
+  MIDDLE_TIP: 12,
+  RING_MCP: 13,
+  RING_PIP: 14,
+  RING_DIP: 15,
+  RING_TIP: 16,
+  PINKY_MCP: 17,
+  PINKY_PIP: 18,
+  PINKY_DIP: 19,
+  PINKY_TIP: 20,
+} as const;
+
+export const HAND_LANDMARK_COUNT = 21;
+
+/** The four fingers that decide hand shape. The thumb is deliberately not one. */
+export type Finger = 'index' | 'middle' | 'ring' | 'pinky';
+
+export const FINGERS: readonly Finger[] = ['index', 'middle', 'ring', 'pinky'] as const;
+
+/**
+ * The joint chain of each finger, knuckle outward. The extension test reads only
+ * `pip` and `tip`; the full chain is here because a fixture or an overlay that
+ * skipped a joint would leave a hole in a 21-landmark array.
+ */
+export const FINGER_JOINTS = {
+  index: {
+    mcp: HAND.INDEX_MCP,
+    pip: HAND.INDEX_PIP,
+    dip: HAND.INDEX_DIP,
+    tip: HAND.INDEX_TIP,
+  },
+  middle: {
+    mcp: HAND.MIDDLE_MCP,
+    pip: HAND.MIDDLE_PIP,
+    dip: HAND.MIDDLE_DIP,
+    tip: HAND.MIDDLE_TIP,
+  },
+  ring: { mcp: HAND.RING_MCP, pip: HAND.RING_PIP, dip: HAND.RING_DIP, tip: HAND.RING_TIP },
+  pinky: {
+    mcp: HAND.PINKY_MCP,
+    pip: HAND.PINKY_PIP,
+    dip: HAND.PINKY_DIP,
+    tip: HAND.PINKY_TIP,
+  },
+} as const satisfies Record<Finger, { mcp: number; pip: number; dip: number; tip: number }>;
+
+/**
+ * The hand shapes the signal specs can ask for.
+ *
+ * Only three of the core ten signals need finger detail at all — Halt's open
+ * palm, Point in line's extended index, Nothing's flat palms — so the vocabulary
+ * stays this small on purpose. `unknown` is a real answer, not an error: a hand
+ * halfway between shapes should fail a constraint rather than be forced into the
+ * nearest bucket.
+ */
+export type HandShape = 'open_palm' | 'fist' | 'index_point' | 'unknown';
+
+/** One detected hand. */
+export interface DetectedHand {
+  /** Image-space landmarks — for drawing, and for matching to a pose wrist. */
+  screen: ScreenPoint[];
+  /** Metric, wrist-origin landmarks — for all shape math. */
+  world: WorldPoint[];
+  /**
+   * Which of the referee's hands, **anatomical**, resolved against the pose
+   * rather than taken from MediaPipe's label — see `handShape.ts`. `null` when
+   * it could not be resolved, which is honest rather than a coin flip.
+   */
+  side: Side | null;
+  /** MediaPipe's own handedness label, verbatim and unswapped. Diagnostics only. */
+  handedness: string;
+  /** Handedness confidence, 0–1. */
+  score: number;
+}
+
+/** One frame of hand detection. Empty `hands` means none were in shot. */
+export interface HandFrame {
+  hands: DetectedHand[];
+  timestampMs: number;
+}
+
 /** Per-side landmark indices, so callers can take a `Side` and stay symmetric. */
 export const POSE_BY_SIDE = {
   left: {

@@ -4,16 +4,19 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import CameraStage from './CameraStage';
 import { LandmarkerError } from '../cv/landmarker';
 import { POSE_LANDMARK_COUNT } from '../cv/types';
-import type { PoseFrame } from '../cv/types';
+import type { HandFrame, PoseFrame } from '../cv/types';
 
 /**
  * The real module pulls in the MediaPipe WASM runtime, which jsdom cannot host.
  * `LandmarkerError` stays real — classification depends on `instanceof`.
  */
-const getPoseDetector = vi.hoisted(() => vi.fn());
+const { getPoseDetector, getHandDetector } = vi.hoisted(() => ({
+  getPoseDetector: vi.fn(),
+  getHandDetector: vi.fn(),
+}));
 vi.mock('../cv/landmarker', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../cv/landmarker')>();
-  return { ...actual, getPoseDetector };
+  return { ...actual, getPoseDetector, getHandDetector };
 });
 
 const getUserMedia = vi.fn();
@@ -40,6 +43,14 @@ function fakeFrame(timestampMs = 0): PoseFrame {
     visibility: 1,
   }));
   return { screen: points, world: points, timestampMs };
+}
+
+/** A frame with one detected hand. Its landmarks are never read here. */
+function fakeHandFrame(timestampMs = 0): HandFrame {
+  return {
+    hands: [{ screen: [], world: [], side: 'right', handedness: 'Left', score: 0.9 }],
+    timestampMs,
+  };
 }
 
 /** A 2D context stub — jsdom has no canvas backend at all. */
@@ -116,6 +127,7 @@ beforeAll(() => {
 beforeEach(() => {
   getUserMedia.mockReset();
   getPoseDetector.mockReset().mockResolvedValue({ detect: () => null });
+  getHandDetector.mockReset().mockResolvedValue({ detect: () => fakeHandFrame() });
   Object.defineProperty(navigator, 'mediaDevices', {
     configurable: true,
     value: { getUserMedia },
@@ -333,5 +345,97 @@ describe('CameraStage detection loop', () => {
     expect(onFrame).toHaveBeenCalledTimes(4);
     expect(context.stroke).not.toHaveBeenCalled();
     expect(HTMLCanvasElement.prototype.getContext).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The hand model is a second inference per frame and a second 7.8 MB download,
+ * and only three of the ten signals need it. What these check is that the cost
+ * is genuinely tied to `needsHands` rather than merely intended to be.
+ */
+describe('CameraStage hand detection', () => {
+  beforeEach(() => {
+    const { stream } = fakeStream();
+    getUserMedia.mockResolvedValue(stream);
+    getPoseDetector.mockResolvedValue({ detect: () => fakeFrame() });
+    stubCanvasContext();
+  });
+
+  it('does not load or run the hand model unless a spec asks for it', async () => {
+    const clock = driveAnimationFrames();
+    const onFrame = vi.fn();
+
+    render(<CameraStage onFrame={onFrame} />);
+    await startCamera();
+    await screen.findByRole('button', { name: /stop camera/i });
+    clock.advance(4, 100);
+
+    expect(getHandDetector).not.toHaveBeenCalled();
+    expect(onFrame).toHaveBeenLastCalledWith(expect.anything(), null);
+  });
+
+  it('runs the hand model and passes the hands alongside the pose', async () => {
+    const handDetect = vi.fn(() => fakeHandFrame());
+    getHandDetector.mockResolvedValue({ detect: handDetect });
+    const clock = driveAnimationFrames();
+    const onFrame = vi.fn();
+
+    render(<CameraStage needsHands onFrame={onFrame} />);
+    await startCamera();
+    await screen.findByRole('button', { name: /stop camera/i });
+    // The model loads asynchronously once the camera is running.
+    await waitFor(() => expect(getHandDetector).toHaveBeenCalled());
+
+    clock.advance(4, 100);
+
+    expect(handDetect).toHaveBeenCalledTimes(4);
+    // Sides are resolved against the pose, so the pose frame has to reach it.
+    expect(handDetect).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.any(Number),
+      expect.objectContaining({ world: expect.anything() })
+    );
+    expect(onFrame).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ hands: expect.any(Array) })
+    );
+  });
+
+  it('skips hand inference on a frame with no pose in it', async () => {
+    const handDetect = vi.fn(() => fakeHandFrame());
+    getHandDetector.mockResolvedValue({ detect: handDetect });
+    getPoseDetector.mockResolvedValue({ detect: () => null });
+    const clock = driveAnimationFrames();
+
+    render(<CameraStage needsHands />);
+    await startCamera();
+    await screen.findByRole('button', { name: /stop camera/i });
+    await waitFor(() => expect(getHandDetector).toHaveBeenCalled());
+
+    clock.advance(4, 100);
+
+    expect(handDetect).not.toHaveBeenCalled();
+  });
+
+  /**
+   * A missing hand model must not cost the user their camera: arm geometry is
+   * still gradeable, and the seven signals that need no finger detail work
+   * exactly as before.
+   */
+  it('keeps the camera running when the hand model fails to load', async () => {
+    getHandDetector.mockRejectedValue(new LandmarkerError('assets-missing', 'nope'));
+    const clock = driveAnimationFrames();
+    const onFrame = vi.fn();
+
+    render(<CameraStage needsHands onFrame={onFrame} />);
+    await startCamera();
+    await screen.findByRole('button', { name: /stop camera/i });
+
+    expect(await screen.findByRole('status')).toHaveTextContent(/hand detail is unavailable/i);
+    expect(screen.getByRole('button', { name: /stop camera/i })).toBeInTheDocument();
+
+    clock.advance(4, 100);
+    expect(onFrame).toHaveBeenCalledTimes(4);
+    expect(onFrame).toHaveBeenLastCalledWith(expect.anything(), null);
   });
 });
