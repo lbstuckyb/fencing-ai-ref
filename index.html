@@ -8,6 +8,22 @@
       name="description"
       content="Practice FIE fencing referee signals and scenario refereeing. All camera processing runs on your device."
     />
+    <script>
+      // Applies the stored theme before first paint so the page never flashes
+      // the wrong one. Must stay in step with src/theme.ts (key and class name).
+      (function () {
+        try {
+          var stored = localStorage.getItem('far:theme');
+          var dark =
+            stored === 'dark' ||
+            ((stored === 'system' || stored === null) &&
+              matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.classList.toggle('dark', dark);
+        } catch (e) {
+          /* no stored preference available; fall through to light */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
