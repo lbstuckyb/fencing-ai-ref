@@ -193,6 +193,40 @@ describe('CameraStage', () => {
     expect(track.stop).toHaveBeenCalled();
   });
 
+  /**
+   * A page holding state that only means something while the camera is live —
+   * a calibration recording, a drill mid-hold — needs the falling edge, whatever
+   * caused it. Missing it leaves an ended session still on screen.
+   */
+  it('reports both edges of the running state', async () => {
+    const { stream } = fakeStream();
+    getUserMedia.mockResolvedValue(stream);
+    const onRunningChange = vi.fn();
+
+    render(<CameraStage onRunningChange={onRunningChange} />);
+    expect(onRunningChange).not.toHaveBeenCalled();
+
+    await startCamera();
+    await screen.findByRole('button', { name: /stop camera/i });
+    expect(onRunningChange).toHaveBeenLastCalledWith(true);
+
+    await userEvent.click(screen.getByRole('button', { name: /stop camera/i }));
+    expect(onRunningChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it('reports the camera stopping when it fails or the page is left', async () => {
+    const { stream } = fakeStream();
+    getUserMedia.mockResolvedValue(stream);
+    const onRunningChange = vi.fn();
+
+    const { unmount } = render(<CameraStage onRunningChange={onRunningChange} />);
+    await startCamera();
+    await screen.findByRole('button', { name: /stop camera/i });
+
+    unmount();
+    expect(onRunningChange).toHaveBeenLastCalledWith(false);
+  });
+
   it('explains a denied permission and offers a retry', async () => {
     getUserMedia.mockRejectedValue(new DOMException('denied', 'NotAllowedError'));
 

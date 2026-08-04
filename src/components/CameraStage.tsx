@@ -125,6 +125,15 @@ export interface CameraStageProps {
    */
   onFrame?: (frame: PoseFrame, hands: HandFrame | null) => void;
   /**
+   * Called with `true` when detection starts and `false` when it stops, for any
+   * reason — the stop button, a failure, or navigating away.
+   *
+   * A page holding state that only means something while the camera is live —
+   * a recording in progress, a drill mid-hold — needs the falling edge, or it
+   * goes on displaying a session that ended.
+   */
+  onRunningChange?: (running: boolean) => void;
+  /**
    * Run the hand landmarker as well, for the signals whose spec sets
    * `needsHands` — Halt, Point in line, Nothing. It is a second model and
    * roughly doubles the per-frame cost, so the other seven signals leave it off.
@@ -145,6 +154,7 @@ export interface CameraStageProps {
 
 export default function CameraStage({
   onFrame,
+  onRunningChange,
   needsHands = false,
   overlay,
   showSkeleton = true,
@@ -181,14 +191,25 @@ export default function CameraStage({
   // Kept in refs so the detection loop never has to be torn down and rebuilt
   // when a parent re-renders with a fresh callback identity or toggles a flag.
   const onFrameRef = useRef(onFrame);
+  const onRunningChangeRef = useRef(onRunningChange);
   const showSkeletonRef = useRef(showSkeleton);
   const needsHandsRef = useRef(needsHands);
   const handDetectorRef = useRef<HandDetector | null>(null);
   useEffect(() => {
     onFrameRef.current = onFrame;
+    onRunningChangeRef.current = onRunningChange;
     showSkeletonRef.current = showSkeleton;
     needsHandsRef.current = needsHands;
-  }, [onFrame, showSkeleton, needsHands]);
+  }, [onFrame, onRunningChange, showSkeleton, needsHands]);
+
+  // Both edges from one effect, so the falling one cannot be missed: whatever
+  // ends the session — stop, failure, unmount — leaving `running` runs the
+  // cleanup.
+  useEffect(() => {
+    if (phase !== 'running') return;
+    onRunningChangeRef.current?.(true);
+    return () => onRunningChangeRef.current?.(false);
+  }, [phase]);
 
   const releaseStream = useCallback(() => {
     if (rafRef.current !== null) {
