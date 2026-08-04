@@ -36,7 +36,7 @@ import {
   torsoHeight,
 } from './geometry';
 import { handForSide, handMetrics } from './hands';
-import { FINGERS, POSE, POSE_BY_SIDE, SIDES } from './types';
+import { FINGERS, POSE, POSE_BY_SIDE, SIDES, otherSide } from './types';
 import type { HandFrame, HandShape, Side, WorldPoint } from './types';
 
 /* -------------------------------------------------------------------------- */
@@ -45,6 +45,8 @@ import type { HandFrame, HandShape, Side, WorldPoint } from './types';
 
 /** Suffix used in measurement ids, matching the `elbow.R` form the specs use. */
 export const SIDE_KEY: Record<Side, 'L' | 'R'> = { left: 'L', right: 'R' };
+
+const SIDE_FROM_KEY: Record<string, Side> = { L: 'left', R: 'right' };
 
 export type MeasurementUnit =
   /** Degrees. */
@@ -209,6 +211,71 @@ export const MEASUREMENT_GROUPS: readonly MeasurementGroup[] = [
 export const MEASUREMENT_IDS: readonly string[] = MEASUREMENT_GROUPS.flatMap((group) =>
   group.rows.flatMap(idsOf)
 );
+
+/* -------------------------------------------------------------------------- */
+/* Ids                                                                        */
+/* -------------------------------------------------------------------------- */
+
+/** What an id names, for anything that reads measurements it did not declare. */
+export interface MeasurementInfo {
+  id: string;
+  /** The row's label, without a side — e.g. `Elbow`. */
+  label: string;
+  unit: MeasurementUnit;
+  hint: string;
+  /** The arm it describes, or `null` for a whole-body value. */
+  side: Side | null;
+  /** Id of the group it is displayed under. */
+  group: string;
+}
+
+/**
+ * Every measurement, by id.
+ *
+ * The signal evaluator (stage 9) is the reason this exists: a constraint names a
+ * measurement and nothing else, and the evaluator turns that name into a label
+ * and a unit to build feedback with. So a spec says `elbow.R` and the user is
+ * told "Elbow (right arm): 120° — expected 155°–180°" without the spec carrying
+ * either word.
+ */
+export const MEASUREMENT_BY_ID: ReadonlyMap<string, MeasurementInfo> = new Map(
+  MEASUREMENT_GROUPS.flatMap((group) =>
+    group.rows.flatMap((row) =>
+      idsOf(row).map((id): [string, MeasurementInfo] => [
+        id,
+        {
+          id,
+          label: row.label,
+          unit: row.unit,
+          hint: row.hint,
+          side: sideOfMeasurementId(id),
+          group: group.id,
+        },
+      ])
+    )
+  )
+);
+
+/** The arm an id describes, or `null` if it is a whole-body measurement. */
+export function sideOfMeasurementId(id: string): Side | null {
+  return SIDE_FROM_KEY[id.slice(-1)] && id.at(-2) === '.' ? SIDE_FROM_KEY[id.slice(-1)] : null;
+}
+
+/**
+ * The same measurement on the other arm; whole-body ids are returned unchanged.
+ *
+ * This is the whole of the evaluator's directional mirroring. Every sided
+ * quantity here is authored to read the same number for a gesture and its mirror
+ * image — azimuth and lateral offset are signed toward the arm's *own* side
+ * precisely so that they do — which means a spec written once for the right arm
+ * grades a left-arm performance by swapping ids, with no threshold rewritten and
+ * no sign flipped.
+ */
+export function mirrorMeasurementId(id: string): string {
+  const side = sideOfMeasurementId(id);
+  if (side === null) return id;
+  return `${id.slice(0, -1)}${SIDE_KEY[otherSide(side)]}`;
+}
 
 /* -------------------------------------------------------------------------- */
 /* Measuring                                                                  */
