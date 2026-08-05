@@ -2,9 +2,11 @@
  * The authored signal specs — the data half of the classifier.
  *
  * `evaluator.ts` knows how to grade a constraint list; this file is the list.
- * Stage 11 authors the three two-armed signals, stage 12 adds the other seven.
+ * All ten core signals live here, laid out in rulebook order. They were not
+ * authored in that order: the three two-armed ones came first, because they were
+ * the hard part, and the seven one-armed ones were fitted around them.
  *
- * ## Why these three first
+ * ## Why the two-armed three came first
  *
  * Double hit, Simultaneous and Nothing are the only real collision risk in the
  * core ten. Every other signal is one-armed, or reads a hand shape, or puts a
@@ -28,6 +30,26 @@
  * different *shape*, so that lowering your arms from a Double hit does not walk
  * through a Simultaneous on the way down.
  *
+ * ## How the other seven separate
+ *
+ * They are all one-armed, and the first thing every one of them says is *the
+ * other arm is down* — which is what keeps a Hit against, an arm straight out to
+ * the side, from also reading as half of a Double hit. After that they fall into
+ * two families that separate on the elbow:
+ *
+ *     straight arm    Halt (overhead)  Point in line / Hit against (lateral)
+ *                     Not valid (down and out)
+ *     bent arm        Attack (forearm lateral)  Parry (forearm vertical, by the
+ *                     head)  Hit scored (arm raised out to the side)
+ *
+ * Within each family the wrist lands somewhere no other member puts it — above
+ * the nose, level with the shoulder, below the waist — with one exception.
+ * **Point in line and Hit against are geometrically identical** and separate on
+ * hand shape alone: a pointed index finger against a flat palm. That is what the
+ * t.63 figures show, so it is what the specs read. A hand the classifier cannot
+ * name leaves both failing, which is the right way round — better to ask the
+ * referee to show their hand than to guess which fencer they meant.
+ *
  * ## Tuning status — read before trusting these numbers
  *
  * The plan asks for these to be authored against live `/calibrate` readouts.
@@ -40,24 +62,29 @@
  * because a real referee is not a mannequin.
  *
  * That makes them a sound starting point and not a finished tuning. To finish
- * it: open `/calibrate`, perform each of the three, read `wrist.height`,
- * `wrists.gap` and `wrist.forward` off the record button's min/median/max, and
- * move the bands here. The discriminator test in `specs.test.ts` will tell you
- * immediately if a widened band has started overlapping its neighbour, which is
- * the one mistake that matters.
+ * it: open `/calibrate`, perform each signal, read the measurements named in its
+ * comment off the record button's min/median/max, and move the bands here. The
+ * discriminator test in `specs.test.ts` will tell you immediately if a widened
+ * band has started overlapping its neighbour, which is the one mistake that
+ * matters.
  */
 
 import { signalLabel } from '../data/rules';
 import type { CoreSignalId } from '../data/rules';
 import { T63_HOLD_MS } from './holdMachine';
 import {
+  abduction,
+  azimuth,
   elbow,
+  elevation,
   hand,
   symmetry,
   wristForward,
   wristGap,
   wristHeight,
   wristLateral,
+  wristVsNose,
+  wristVsShoulder,
 } from './evaluator';
 import type { Constraint, SignalSpec } from './evaluator';
 
@@ -106,6 +133,242 @@ function coreSpec({ id, description, directional, constraints }: SpecInput): Sig
  * distinguishable from a badly-made anything.
  */
 const LEVEL_ARMS = 0.18;
+
+/**
+ * Highest the non-signalling wrist may be, in torso lengths, for a signal to
+ * count as one-armed.
+ *
+ * 0.4 is a little above the waist — comfortably over a hand hanging at the side,
+ * which reads about −0.1, and comfortably under the 0.5 of a Simultaneous or the
+ * 1.0 of a Double hit. Without it a Hit against and one half of a Double hit are
+ * the same measurement set, so this single constraint is what keeps the
+ * one-armed and two-armed families apart. It is also honest coaching: t.63's
+ * figures show the free arm down for every one of these seven.
+ */
+const OFF_ARM_MAX_HEIGHT = 0.4;
+
+/** "The other arm is down" — the first thing every one-armed signal requires. */
+function offArmDown() {
+  return wristHeight('L', [null, OFF_ARM_MAX_HEIGHT], {
+    feedback: 'Keep your other arm down at your side',
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/* The one-armed signals                                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * One arm straight overhead, palm open.
+ *
+ * Fixture reads: elbow 180°, abduction 180°, wrist 0.65 above the nose.
+ *
+ * Nothing else in the set puts a wrist above the nose, so `wrist.vsNose` alone
+ * would very nearly do. `elbow` and `abduction` are there for the feedback more
+ * than the verdict: a referee whose Halt fails wants to be told *straighten the
+ * arm*, not *raise your hand higher*, and the two mistakes are only separable if
+ * both are measured.
+ *
+ * Not directional. A referee may stop the bout with either hand and t.63 reads
+ * no meaning into which — the only signal in the set where the arm used says
+ * nothing about a fencer.
+ */
+export const HALT: SignalSpec = coreSpec({
+  id: 'halt',
+  description:
+    'One arm raised straight overhead with the palm open: stop fencing. The other arm stays down.',
+  directional: false,
+  constraints: [
+    elbow('R', [155, 180], { feedback: 'Straighten your raised arm fully' }),
+    abduction('R', [150, 180], { feedback: 'Take your arm straight up overhead' }),
+    wristVsNose('R', [0.15, null], { feedback: 'Raise your hand above your head' }),
+    hand('R', 'open_palm', { feedback: 'Open your raised hand fully, palm forward' }),
+    offArmDown(),
+  ],
+});
+
+/**
+ * Signalling arm out to the side, elbow bent, forearm pointing laterally at the
+ * fencer who attacked.
+ *
+ * Fixture reads: elbow 139°, abduction 85°, forearm azimuth 95°, wrist level
+ * with the shoulder, 1.35 out from the midline.
+ *
+ * The bent elbow is the whole discrimination against Hit against and Point in
+ * line, which put the wrist in the same place with the arm straight — so the
+ * elbow band stops at 152° rather than running to 180°, and the gap from there
+ * to Hit against's 155° belongs to no one on purpose.
+ *
+ * This is also the signal reused for Stop-hit, Counter-attack and Remise, which
+ * t.63 gives no gesture of their own: they are called aloud over this same arm.
+ */
+export const ATTACK: SignalSpec = coreSpec({
+  id: 'attack',
+  description:
+    'The signalling arm out to the side with the elbow bent, forearm pointing at the fencer who attacked. The same gesture serves for stop-hit, counter-attack and remise, which are named aloud.',
+  directional: true,
+  constraints: [
+    elbow('R', [95, 152], { feedback: 'Bend your elbow — a straight arm is a different signal' }),
+    abduction('R', [55, 110], { feedback: 'Bring your upper arm out to shoulder height' }),
+    azimuth('R', [45, 135], 'forearm', {
+      feedback: 'Point your forearm out to the side, at the fencer who attacked',
+    }),
+    wristVsShoulder('R', [-0.35, 0.22], { feedback: 'Hold your hand level with your shoulder' }),
+    wristLateral('R', [0.7, null], { feedback: 'Take the signal out to the side, not forward' }),
+    offArmDown(),
+  ],
+});
+
+/**
+ * Forearm raised near-vertical beside the head, mimicking the parry itself.
+ *
+ * Fixture reads: elbow 75°, forearm elevation 85°, wrist 0.32 above the shoulder
+ * and 0.46 out from the midline.
+ *
+ * Parry and Hit scored are the two bent-arm signals with the hand above the
+ * shoulder, and what separates them is where the elbow is: a parry keeps it
+ * tucked low with the hand near the head, while Hit scored raises the whole arm
+ * out on the scoring fencer's side. `wrist.lateral` is the primary discriminator
+ * — under 0.62 is beside the head, over 0.70 is out to the side — and
+ * `abduction` is the same statement made at the shoulder.
+ *
+ * Also serves Counter-time, which t.63 gives no separate gesture.
+ */
+export const PARRY: SignalSpec = coreSpec({
+  id: 'parry',
+  description:
+    'The forearm raised near-vertical beside the head with the elbow low, mimicking a parry: the fencer on that side parried. Counter-time uses the same gesture.',
+  directional: true,
+  constraints: [
+    elbow('R', [50, 118], { feedback: 'Bend your elbow to about a right angle' }),
+    elevation('R', [55, 105], 'forearm', {
+      feedback: 'Bring your forearm up towards vertical, as if parrying',
+    }),
+    abduction('R', [25, 78], { feedback: 'Keep your elbow low — only the forearm comes up' }),
+    wristVsShoulder('R', [0.1, null], { feedback: 'Raise your hand above your shoulder' }),
+    wristLateral('R', [null, 0.62], {
+      feedback: 'Keep your hand beside your head, not out to the side',
+    }),
+    offArmDown(),
+  ],
+});
+
+/**
+ * Arm straight out to the side with the index finger extended at the fencer who
+ * held the line.
+ *
+ * Fixture reads: elbow 180°, abduction 90°, wrist level with the shoulder, 1.44
+ * out from the midline, hand `index_point`.
+ *
+ * Geometrically this *is* Hit against — see the module comment. The pointed
+ * finger is the only thing between them, which is why both carry `needsHands`
+ * and why a hand the classifier reads as `unknown` fails both rather than
+ * resolving to whichever was declared first.
+ */
+export const POINT_IN_LINE: SignalSpec = coreSpec({
+  id: 'point_in_line',
+  description:
+    'The arm extended straight out to the side with the index finger pointed at the fencer who established the point in line.',
+  directional: true,
+  constraints: [
+    elbow('R', [158, 180], { feedback: 'Extend your arm fully' }),
+    abduction('R', [65, 115], { feedback: 'Hold your arm out at shoulder height' }),
+    wristVsShoulder('R', [-0.3, 0.3], { feedback: 'Hold your hand level with your shoulder' }),
+    wristLateral('R', [0.85, null], { feedback: 'Point straight out to the side' }),
+    hand('R', 'index_point', {
+      feedback: 'Point with your index finger — an open hand is “hit against”',
+    }),
+    offArmDown(),
+  ],
+});
+
+/**
+ * Arm raised out and up on the scoring fencer's side, elbow near a right angle.
+ *
+ * Fixture reads: elbow 110°, abduction 105°, wrist 0.67 above the shoulder and
+ * 0.90 out from the midline.
+ *
+ * Bounded above at 125° of elbow so that straightening into a Halt is a change
+ * of signal rather than a stricter Hit scored, and below at 0.7 of lateral
+ * offset so that folding the arm in towards the head is a Parry.
+ *
+ * The boundary with Attack is height: this signal starts 0.32 of a torso above
+ * the shoulder, Attack stops 0.22 above it, and the tenth in between is nobody's
+ * — an arm out at shoulder height with a bent elbow is an Attack, and the same
+ * arm raised is a Hit scored.
+ */
+export const HIT_SCORED: SignalSpec = coreSpec({
+  id: 'hit_scored',
+  description:
+    'The arm raised out and up on the side of the fencer who scored, elbow at about a right angle: the hit is theirs.',
+  directional: true,
+  constraints: [
+    elbow('R', [55, 125], { feedback: 'Bend your elbow to about a right angle' }),
+    abduction('R', [78, 145], { feedback: 'Raise your whole arm out to the scorer’s side' }),
+    wristVsShoulder('R', [0.32, null], { feedback: 'Raise your hand well above your shoulder' }),
+    wristLateral('R', [0.7, null], {
+      feedback: 'Raise the arm out on the scorer’s side, not in front of your head',
+    }),
+    offArmDown(),
+  ],
+});
+
+/**
+ * Arm straight out to the side, palm flat, on the side of the fencer the hit was
+ * scored against.
+ *
+ * Fixture reads: elbow 180°, abduction 90°, wrist level with the shoulder, 1.46
+ * out from the midline, hand `open_palm`.
+ *
+ * The flat hand is not decoration here: it is the entire difference from Point
+ * in line. See the module comment.
+ */
+export const HIT_AGAINST: SignalSpec = coreSpec({
+  id: 'hit_against',
+  description:
+    'The arm extended straight out to the side with a flat hand, on the side of the fencer against whom the hit was scored.',
+  directional: true,
+  constraints: [
+    elbow('R', [155, 180], { feedback: 'Extend your arm fully' }),
+    abduction('R', [70, 110], { feedback: 'Hold your arm out at shoulder height' }),
+    wristVsShoulder('R', [-0.3, 0.3], { feedback: 'Hold your hand level with your shoulder' }),
+    wristLateral('R', [0.85, null], { feedback: 'Take your arm straight out to the side' }),
+    hand('R', 'open_palm', {
+      feedback: 'Show a flat, open hand — a pointed finger is “point in line”',
+    }),
+    offArmDown(),
+  ],
+});
+
+/**
+ * Arm straight, extended down and out towards the floor.
+ *
+ * Fixture reads: elbow 180°, upper arm elevation −50°, wrist 0.84 below the
+ * shoulder and 0.94 out from the midline.
+ *
+ * The lateral bound is what stops a Nothing — arms low and forward, elevation
+ * about −60° — from reading as a one-armed Not valid: that gesture keeps the
+ * hands in front of the body at about 0.5 out, this one takes the arm away from
+ * it. Foil only; sabre and épée have no off-target, so `allowedSignals` never
+ * offers it there.
+ */
+export const NOT_VALID: SignalSpec = coreSpec({
+  id: 'not_valid',
+  description:
+    'The arm extended straight down and out towards the floor on that fencer’s side: their hit landed off-target and does not count.',
+  directional: true,
+  constraints: [
+    elbow('R', [150, 180], { feedback: 'Keep the arm straight' }),
+    elevation('R', [-72, -28], 'upper', {
+      feedback: 'Angle the arm down towards the floor, about halfway to your side',
+    }),
+    wristVsShoulder('R', [null, -0.45], { feedback: 'Hold your hand well below your shoulder' }),
+    wristLateral('R', [0.75, null], {
+      feedback: 'Take the arm out away from your body, not straight down in front',
+    }),
+    offArmDown(),
+  ],
+});
 
 /* -------------------------------------------------------------------------- */
 /* The hard trio                                                              */
@@ -210,17 +473,29 @@ export const NOTHING: SignalSpec = coreSpec({
 /**
  * Every authored spec, in the canonical order of `CORE_SIGNALS`.
  *
- * Incomplete until stage 12 — the practice page and the scenario call phase read
- * this list, so both currently offer three signals rather than ten. Adding a
- * spec here is the whole of adding a signal to the app.
+ * The core ten, complete. The practice page and the scenario call phase read
+ * this list, so adding a spec here — plus its id in `rules.ts` — is the whole of
+ * adding a signal to the app. The other ten t.63 signals are pure data additions
+ * of exactly this shape.
  */
-export const SIGNAL_SPECS: readonly SignalSpec[] = [DOUBLE_HIT, SIMULTANEOUS, NOTHING];
+export const SIGNAL_SPECS: readonly SignalSpec[] = [
+  HALT,
+  ATTACK,
+  PARRY,
+  POINT_IN_LINE,
+  HIT_SCORED,
+  HIT_AGAINST,
+  NOT_VALID,
+  DOUBLE_HIT,
+  SIMULTANEOUS,
+  NOTHING,
+];
 
 export const SIGNAL_BY_ID: ReadonlyMap<string, SignalSpec> = new Map(
   SIGNAL_SPECS.map((spec) => [spec.id, spec])
 );
 
-/** The spec for an id, or `undefined` where stage 12 has not authored one yet. */
+/** The spec for an id, or `undefined` for anything outside the core ten. */
 export function signalSpec(id: string): SignalSpec | undefined {
   return SIGNAL_BY_ID.get(id);
 }
