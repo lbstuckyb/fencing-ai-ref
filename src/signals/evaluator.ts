@@ -330,8 +330,14 @@ function infoFor(id: string): MeasurementInfo {
   );
 }
 
-/** A measurement id as read for a given signalling side. */
-function resolve(measure: string, side: Side): string {
+/**
+ * A measurement id as read for a given signalling side.
+ *
+ * Exported for `calibration.ts`, which needs the exact same `.R`/`.L` mirroring
+ * to turn a recorded arm into the anatomical id a calibration was measured
+ * under — reusing this keeps the two in lockstep by construction.
+ */
+export function resolve(measure: string, side: Side): string {
   return side === 'right' ? measure : mirrorMeasurementId(measure);
 }
 
