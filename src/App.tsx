@@ -1,6 +1,7 @@
 import { Route, Routes } from 'react-router-dom';
 import Layout from './components/Layout';
 import Calibrate from './pages/Calibrate';
+import CalibrateSignals from './pages/CalibrateSignals';
 import Home from './pages/Home';
 import NotFound from './pages/NotFound';
 import PracticeSignals from './pages/PracticeSignals';
@@ -20,6 +21,7 @@ export default function App() {
         <Route path="practice" element={<PracticeSignals />} />
         <Route path="scenarios" element={<Scenarios />} />
         <Route path="calibrate" element={<Calibrate />} />
+        <Route path="calibrate-signals" element={<CalibrateSignals />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>

@@ -37,4 +37,9 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: 'Calibrate',
     blurb: 'Live joint readouts — the numbers the signal specs are tuned against.',
   },
+  {
+    path: '/calibrate-signals',
+    label: 'Expert calibration',
+    blurb: 'Record yourself making each signal correctly, and grade against that instead.',
+  },
 ] as const;
