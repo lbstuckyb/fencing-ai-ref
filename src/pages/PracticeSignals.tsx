@@ -122,19 +122,30 @@ export default function PracticeSignals() {
 
   const overlay = (
     <>
-      <div className="absolute left-1/2 top-2 -translate-x-1/2 rounded-md bg-black/60 px-3 py-1.5 text-center text-white">
-        <p className="text-[0.65rem] uppercase tracking-wide text-white/70">Make this signal</p>
-        <p className="text-lg font-semibold leading-tight">{prompt.spec.label}</p>
+      {/*
+        Read from further away than anything else in the app — the referee is
+        standing back from the monitor with their arms up. The prompt is sized
+        for that distance, and the reference prose elsewhere on the page is not.
+      */}
+      <div className="absolute left-1/2 top-2 -translate-x-1/2 rounded-md bg-black/60 px-5 py-3 text-center text-white">
+        <p className="text-xs uppercase tracking-wide text-white/70 sm:text-sm">Make this signal</p>
+        <p className="text-3xl font-semibold leading-tight sm:text-4xl lg:text-5xl">
+          {prompt.spec.label}
+        </p>
         {prompt.side ? (
-          <p className="text-xs text-white/80">with your {prompt.side} arm</p>
+          <p className="text-base text-white/80 sm:text-xl">with your {prompt.side} arm</p>
         ) : (
-          <p className="text-xs text-white/80">either arm</p>
+          <p className="text-base text-white/80 sm:text-xl">either arm</p>
         )}
       </div>
 
-      <div className="absolute bottom-2 right-2 flex flex-col items-center gap-1">
-        <HoldRing progress={drill.progress} phase={hold.phase} />
-        <p className="rounded bg-black/60 px-2 py-1 text-xs text-white">
+      <div className="absolute bottom-2 right-2 flex flex-col items-center gap-2">
+        <HoldRing
+          progress={drill.progress}
+          phase={hold.phase}
+          className="h-28 w-28 sm:h-36 sm:w-36"
+        />
+        <p className="rounded bg-black/60 px-3 py-1.5 text-lg font-semibold text-white sm:text-xl">
           {hold.phase === 'held' ? 'Held' : hold.phase === 'forming' ? 'Hold it…' : 'Not holding'}
         </p>
       </div>
@@ -148,7 +159,12 @@ export default function PracticeSignals() {
         lede={`Drill one signal at a time. The camera grades the shape of the gesture and the hold t.63 requires — “${SIGNAL_ARTICLE.durationRule}” — and tells you which part was wrong.`}
       />
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+      {/*
+        The camera takes whatever the window has; the sidebar is a fixed column
+        wide enough to read the coaching in and no wider. A proportional split
+        would hand the sidebar half a 1920px monitor for three numbers.
+      */}
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
         <div>
           <CameraStage
             onFrame={onFrame}
@@ -180,7 +196,7 @@ export default function PracticeSignals() {
               { label: 'Held', value: `${drill.passes}/${drill.attempts}` },
             ].map(({ label, value }) => (
               <div key={label}>
-                <dt className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                <dt className="text-sm uppercase tracking-wide text-slate-500 dark:text-slate-400">
                   {label}
                 </dt>
                 {/*
@@ -188,7 +204,7 @@ export default function PracticeSignals() {
                   tree ties the pair together — hence the explicit label, so the
                   number is not announced as a bare "3".
                 */}
-                <dd aria-label={label} className="mt-0.5 text-xl font-semibold tabular-nums">
+                <dd aria-label={label} className="mt-0.5 text-4xl font-semibold tabular-nums">
                   {value}
                 </dd>
               </div>
@@ -214,7 +230,7 @@ export default function PracticeSignals() {
           The core ten of the twenty signals in Article {SIGNAL_ARTICLE.article}. The other ten are
           reference-only for now.
         </p>
-        <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{picker}</ul>
+        <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{picker}</ul>
       </section>
     </>
   );

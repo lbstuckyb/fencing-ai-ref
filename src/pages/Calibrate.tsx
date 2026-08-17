@@ -69,7 +69,7 @@ function ValueCell({ value, summary, row }: ValueCellProps) {
     <td className="py-2 pr-4 align-top tabular-nums">
       <div>{formatMeasurement(value, row.unit)}</div>
       {summary !== undefined ? (
-        <div className="text-xs text-slate-500 dark:text-slate-400">
+        <div className="text-sm text-slate-500 dark:text-slate-400">
           {formatSummary(summary, row)}
         </div>
       ) : null}
@@ -92,9 +92,9 @@ function GroupTable({ group, measurements, recording }: GroupTableProps) {
       <p className="mt-1 max-w-2xl text-sm text-slate-600 dark:text-slate-400">{group.note}</p>
 
       <div className="mt-3 overflow-x-auto">
-        <table className="w-full min-w-md border-collapse text-left text-sm">
+        <table className="w-full min-w-md border-collapse text-left text-base">
           <thead>
-            <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:text-slate-400">
+            <tr className="border-b border-slate-200 text-sm uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:text-slate-400">
               <th className="py-2 pr-4 font-medium">Measurement</th>
               {COLUMNS.map((side) => (
                 <th key={side} className="py-2 pr-4 font-medium">
@@ -111,7 +111,7 @@ function GroupTable({ group, measurements, recording }: GroupTableProps) {
                   <th scope="row" className="py-2 pr-4 font-sans font-normal align-top">
                     <span className="font-medium">{row.label}</span>
                     {row.hint ? (
-                      <span className="block text-xs text-slate-500 dark:text-slate-400">
+                      <span className="block text-sm text-slate-500 dark:text-slate-400">
                         {row.hint}
                       </span>
                     ) : null}
@@ -134,7 +134,7 @@ function GroupTable({ group, measurements, recording }: GroupTableProps) {
                     <td className="py-2 pr-4 align-top tabular-nums" colSpan={COLUMNS.length}>
                       <div>{formatMeasurement(measurements.values[row.id], row.unit)}</div>
                       {recording ? (
-                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                        <div className="text-sm text-slate-500 dark:text-slate-400">
                           {formatSummary(recording.stats[row.id], row)}
                         </div>
                       ) : null}

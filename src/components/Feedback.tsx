@@ -54,11 +54,11 @@ function ScoreBar({ score }: { score: number }) {
   const percent = Math.round(Math.min(1, Math.max(0, score)) * 100);
   return (
     <div>
-      <div className="flex items-baseline justify-between text-xs text-slate-600 dark:text-slate-400">
+      <div className="flex items-baseline justify-between text-base text-slate-600 dark:text-slate-400">
         <span>Shape</span>
         <span className="tabular-nums">{percent}%</span>
       </div>
-      <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+      <div className="mt-1 h-3 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
         <div
           className="h-full rounded-full bg-sky-500 transition-[width] duration-100 ease-linear"
           style={{ width: `${percent}%` }}
@@ -96,11 +96,11 @@ export default function Feedback({
       {attempt && verdict ? (
         <div
           role="status"
-          className={`rounded-lg border p-3 text-sm ${verdict.className}`}
+          className={`rounded-lg border p-4 text-lg ${verdict.className}`}
           data-outcome={attempt.outcome}
         >
           <p className="font-medium">
-            <span aria-hidden className="mr-1.5">
+            <span aria-hidden className="mr-2 text-2xl">
               {verdict.mark}
             </span>
             {verdictTitle(attempt)}
@@ -110,33 +110,33 @@ export default function Feedback({
       ) : null}
 
       <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
           {prompt.spec.label}
           {prompt.side ? ` — your ${prompt.side} arm` : ''}
         </h2>
 
         {!live ? (
-          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+          <p className="mt-2 text-lg text-slate-600 dark:text-slate-400">
             Start the camera to be graded. {prompt.spec.description}
           </p>
         ) : evaluation === null ? (
-          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+          <p className="mt-2 text-lg text-slate-600 dark:text-slate-400">
             Waiting for a pose — stand back far enough that your whole upper body is in frame.
           </p>
         ) : wrongArm ? (
-          <p className="mt-2 text-sm text-amber-700 dark:text-amber-300">
+          <p className="mt-2 text-lg text-amber-700 dark:text-amber-300">
             That is the right signal, but on your {evaluation.side} arm. This one names the fencer
             on your {prompt.side}.
           </p>
         ) : evaluation.pass ? (
-          <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-300">
+          <p className="mt-2 text-lg text-emerald-700 dark:text-emerald-300">
             {phase === 'held'
               ? 'Held long enough — t.63 asks for one to two seconds.'
               : 'That is the signal — hold it.'}
           </p>
         ) : (
           <>
-            <ul className="mt-2 space-y-1.5 text-sm text-slate-700 dark:text-slate-300">
+            <ul className="mt-2 space-y-2 text-lg text-slate-700 dark:text-slate-300">
               {evaluation.failures.slice(0, SHOWN_REASONS).map((reason) => (
                 <li key={reason.measure}>{reason.message}</li>
               ))}

@@ -29,8 +29,8 @@ export default function SignalCard({ spec, selected, onSelect }: SignalCardProps
           : 'border-slate-200 hover:border-slate-400 hover:bg-slate-50 dark:border-slate-800 dark:hover:border-slate-600 dark:hover:bg-slate-900'
       }`}
     >
-      <span className="block text-sm font-medium">{spec.label}</span>
-      <span className="mt-1 block text-xs text-slate-600 dark:text-slate-400">
+      <span className="block text-base font-medium">{spec.label}</span>
+      <span className="mt-1 block text-sm text-slate-600 dark:text-slate-400">
         {spec.description}
       </span>
       <span className="mt-2 block text-xs text-slate-500 dark:text-slate-500">

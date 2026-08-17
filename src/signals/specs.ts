@@ -67,6 +67,12 @@
  * discriminator test in `specs.test.ts` will tell you immediately if a widened
  * band has started overlapping its neighbour, which is the one mistake that
  * matters.
+ *
+ * One band has now been off the mannequin and in front of a person:
+ * `STRAIGHT_ARM`, and `BENT_ARM_MAX` with it, because the two are joined. A
+ * referee extending an arm as far as it goes was failing every straight-armed
+ * signal at 97% of the shape score, on the elbow alone. Everything else here is
+ * still mannequin-authored.
  */
 
 import { signalLabel } from '../data/rules';
@@ -86,7 +92,7 @@ import {
   wristVsNose,
   wristVsShoulder,
 } from './evaluator';
-import type { Constraint, SignalSpec } from './evaluator';
+import type { Band, Constraint, SignalSpec } from './evaluator';
 
 /* -------------------------------------------------------------------------- */
 /* Authoring                                                                  */
@@ -147,6 +153,32 @@ const LEVEL_ARMS = 0.18;
  */
 const OFF_ARM_MAX_HEIGHT = 0.4;
 
+/**
+ * "The arm is straight", as a real body and a pose model report it rather than as
+ * the mannequin does.
+ *
+ * The fixtures extend to exactly 180°; a person at the limit of their extension
+ * measures nearer 150°, and MediaPipe's world-space Z adds a few degrees of
+ * apparent bend on top. 148° is that floor with margin, and it is the number the
+ * user hit — a fully-extended arm was failing at 97% on nothing but this.
+ */
+const STRAIGHT_ARM: Band = [148, 180];
+
+/**
+ * Elbow ceiling for Attack, which is the *only* thing separating it from Hit
+ * against and Point in line. It has to stay a few degrees under STRAIGHT_ARM's
+ * floor so the strip between them belongs to no signal, and a few degrees over
+ * Attack's own 139° fixture so a correctly-bent arm is not called too straight.
+ */
+const BENT_ARM_MAX = 145;
+
+/**
+ * The straight-arm floor for Simultaneous alone, which converges the hands in
+ * front of the chest and so bends the elbows whether or not the referee means
+ * it. Looser than STRAIGHT_ARM by design — see the spec's own comment.
+ */
+const CONVERGED_ARM: Band = [140, 180];
+
 /** "The other arm is down" — the first thing every one-armed signal requires. */
 function offArmDown() {
   return wristHeight('L', [null, OFF_ARM_MAX_HEIGHT], {
@@ -179,7 +211,7 @@ export const HALT: SignalSpec = coreSpec({
     'One arm raised straight overhead with the palm open: stop fencing. The other arm stays down.',
   directional: false,
   constraints: [
-    elbow('R', [155, 180], { feedback: 'Straighten your raised arm fully' }),
+    elbow('R', STRAIGHT_ARM, { feedback: 'Straighten your raised arm fully' }),
     abduction('R', [150, 180], { feedback: 'Take your arm straight up overhead' }),
     wristVsNose('R', [0.15, null], { feedback: 'Raise your hand above your head' }),
     hand('R', 'open_palm', { feedback: 'Open your raised hand fully, palm forward' }),
@@ -196,8 +228,11 @@ export const HALT: SignalSpec = coreSpec({
  *
  * The bent elbow is the whole discrimination against Hit against and Point in
  * line, which put the wrist in the same place with the arm straight — so the
- * elbow band stops at 152° rather than running to 180°, and the gap from there
- * to Hit against's 155° belongs to no one on purpose.
+ * elbow band stops at 145° rather than running to 180°, and the gap from there
+ * to the 148° of STRAIGHT_ARM belongs to no one on purpose. That gap is
+ * narrower than it was: the straight-arm floor came down to meet a real body,
+ * and this ceiling had to come down with it or the two families would overlap.
+ * It cannot come down much further — the fixture for this signal reads 139°.
  *
  * This is also the signal reused for Stop-hit, Counter-attack and Remise, which
  * t.63 gives no gesture of their own: they are called aloud over this same arm.
@@ -208,7 +243,9 @@ export const ATTACK: SignalSpec = coreSpec({
     'The signalling arm out to the side with the elbow bent, forearm pointing at the fencer who attacked. The same gesture serves for stop-hit, counter-attack and remise, which are named aloud.',
   directional: true,
   constraints: [
-    elbow('R', [95, 152], { feedback: 'Bend your elbow — a straight arm is a different signal' }),
+    elbow('R', [95, BENT_ARM_MAX], {
+      feedback: 'Bend your elbow — a straight arm is a different signal',
+    }),
     abduction('R', [55, 110], { feedback: 'Bring your upper arm out to shoulder height' }),
     azimuth('R', [45, 135], 'forearm', {
       feedback: 'Point your forearm out to the side, at the fencer who attacked',
@@ -271,7 +308,7 @@ export const POINT_IN_LINE: SignalSpec = coreSpec({
     'The arm extended straight out to the side with the index finger pointed at the fencer who established the point in line.',
   directional: true,
   constraints: [
-    elbow('R', [158, 180], { feedback: 'Extend your arm fully' }),
+    elbow('R', STRAIGHT_ARM, { feedback: 'Extend your arm fully' }),
     abduction('R', [65, 115], { feedback: 'Hold your arm out at shoulder height' }),
     wristVsShoulder('R', [-0.3, 0.3], { feedback: 'Hold your hand level with your shoulder' }),
     wristLateral('R', [0.85, null], { feedback: 'Point straight out to the side' }),
@@ -329,7 +366,7 @@ export const HIT_AGAINST: SignalSpec = coreSpec({
     'The arm extended straight out to the side with a flat hand, on the side of the fencer against whom the hit was scored.',
   directional: true,
   constraints: [
-    elbow('R', [155, 180], { feedback: 'Extend your arm fully' }),
+    elbow('R', STRAIGHT_ARM, { feedback: 'Extend your arm fully' }),
     abduction('R', [70, 110], { feedback: 'Hold your arm out at shoulder height' }),
     wristVsShoulder('R', [-0.3, 0.3], { feedback: 'Hold your hand level with your shoulder' }),
     wristLateral('R', [0.85, null], { feedback: 'Take your arm straight out to the side' }),
@@ -358,7 +395,7 @@ export const NOT_VALID: SignalSpec = coreSpec({
     'The arm extended straight down and out towards the floor on that fencer’s side: their hit landed off-target and does not count.',
   directional: true,
   constraints: [
-    elbow('R', [150, 180], { feedback: 'Keep the arm straight' }),
+    elbow('R', STRAIGHT_ARM, { feedback: 'Keep the arm straight' }),
     elevation('R', [-72, -28], 'upper', {
       feedback: 'Angle the arm down towards the floor, about halfway to your side',
     }),
@@ -390,8 +427,8 @@ export const DOUBLE_HIT: SignalSpec = coreSpec({
     'Both arms extended sideways at shoulder height: both fencers scored — a double hit, which counts for both in épée.',
   directional: false,
   constraints: [
-    elbow('R', [150, 180], { feedback: 'Straighten both arms fully out to the sides' }),
-    elbow('L', [150, 180], { feedback: 'Straighten both arms fully out to the sides' }),
+    elbow('R', STRAIGHT_ARM, { feedback: 'Straighten both arms fully out to the sides' }),
+    elbow('L', STRAIGHT_ARM, { feedback: 'Straighten both arms fully out to the sides' }),
     wristHeight('R', [0.78, 1.3], { feedback: 'Raise both hands to shoulder height' }),
     wristHeight('L', [0.78, 1.3], { feedback: 'Raise both hands to shoulder height' }),
     wristLateral('R', [0.8, null], { feedback: 'Take both arms out to the sides, not forward' }),
@@ -405,7 +442,7 @@ export const DOUBLE_HIT: SignalSpec = coreSpec({
  *
  * Fixture reads: height 0.50, gap 0.36, forward 0.81, elbow 157°.
  *
- * The elbow band is looser than the other two (140° rather than 150°) because
+ * The elbow band is looser than the other two (140° rather than 148°) because
  * converging the hands in front of the body bends the arms slightly whether or
  * not the referee intends it — the t.63 figure shows arms that are extended, not
  * locked. `wrists.gap` is the constraint doing the real work: under 0.85
@@ -418,8 +455,8 @@ export const SIMULTANEOUS: SignalSpec = coreSpec({
     'Both arms brought forward with the hands converging in front of the chest: the two attacks were simultaneous, so no hit is awarded.',
   directional: false,
   constraints: [
-    elbow('R', [140, 180], { feedback: 'Extend both arms forward' }),
-    elbow('L', [140, 180], { feedback: 'Extend both arms forward' }),
+    elbow('R', CONVERGED_ARM, { feedback: 'Extend both arms forward' }),
+    elbow('L', CONVERGED_ARM, { feedback: 'Extend both arms forward' }),
     wristHeight('R', [0.28, 0.74], { feedback: 'Hold both hands at chest height' }),
     wristHeight('L', [0.28, 0.74], { feedback: 'Hold both hands at chest height' }),
     wristForward('R', [0.4, null], { feedback: 'Bring both arms out in front of you' }),
@@ -450,8 +487,8 @@ export const NOTHING: SignalSpec = coreSpec({
     'Both arms extended low and forward with the palms turned down: no hit is awarded — the phrase produced nothing.',
   directional: false,
   constraints: [
-    elbow('R', [150, 180], { feedback: 'Straighten both arms' }),
-    elbow('L', [150, 180], { feedback: 'Straighten both arms' }),
+    elbow('R', STRAIGHT_ARM, { feedback: 'Straighten both arms' }),
+    elbow('L', STRAIGHT_ARM, { feedback: 'Straighten both arms' }),
     wristHeight('R', [null, 0.3], { feedback: 'Lower both hands below your waist' }),
     wristHeight('L', [null, 0.3], { feedback: 'Lower both hands below your waist' }),
     wristForward('R', [0.35, null], {

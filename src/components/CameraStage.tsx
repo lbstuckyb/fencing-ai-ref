@@ -485,7 +485,7 @@ export default function CameraStage({
               // raise your right arm and the cyan limb must be the one that
               // moves. Sides are anatomical everywhere in this app, and a
               // silently inverted one would wreck every directional signal.
-              <p className="absolute bottom-2 left-2 flex items-center gap-3 rounded bg-black/60 px-2 py-1 text-xs text-white">
+              <p className="absolute bottom-2 left-2 flex items-center gap-3 rounded bg-black/60 px-2 py-1 text-sm text-white">
                 <span className="flex items-center gap-1.5">
                   <span
                     aria-hidden
@@ -509,14 +509,14 @@ export default function CameraStage({
 
         {phase === 'idle' ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center">
-            <p className="max-w-sm text-sm text-slate-300">
+            <p className="max-w-md text-base text-slate-300">
               The camera stays off until you start it, and every frame is processed in this tab.
               Nothing is uploaded or recorded.
             </p>
             <button
               type="button"
               onClick={start}
-              className="rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-sky-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400"
+              className="rounded-md bg-sky-600 px-4 py-2 text-base font-medium text-white transition-colors hover:bg-sky-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400"
             >
               Start camera
             </button>
@@ -525,8 +525,8 @@ export default function CameraStage({
 
         {phase === 'starting' ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-6 text-center">
-            <p className="text-sm text-slate-300">Starting camera and loading the pose model…</p>
-            <p className="text-xs text-slate-400">
+            <p className="text-base text-slate-300">Starting camera and loading the pose model…</p>
+            <p className="text-sm text-slate-400">
               The model is about 6 MB and is only loaded once per session.
             </p>
           </div>
@@ -538,12 +538,12 @@ export default function CameraStage({
             className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center"
           >
             <p className="font-medium text-white">{failure.title}</p>
-            <p className="max-w-md text-sm text-slate-300">{failure.detail}</p>
+            <p className="max-w-md text-base text-slate-300">{failure.detail}</p>
             {failure.retryable ? (
               <button
                 type="button"
                 onClick={start}
-                className="rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-sky-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400"
+                className="rounded-md bg-sky-600 px-4 py-2 text-base font-medium text-white transition-colors hover:bg-sky-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400"
               >
                 Try again
               </button>

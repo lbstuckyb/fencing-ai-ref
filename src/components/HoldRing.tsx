@@ -34,13 +34,18 @@ interface HoldRingProps {
   /** 0–1, from the hold machine. */
   progress: number;
   phase: HoldPhase;
+  /**
+   * Rendered size. All the geometry is in `viewBox` units, so a caller who needs
+   * the ring readable from across the room only has to change this.
+   */
+  className?: string;
 }
 
-export default function HoldRing({ progress, phase }: HoldRingProps) {
+export default function HoldRing({ progress, phase, className = 'h-20 w-20' }: HoldRingProps) {
   const clamped = Math.min(1, Math.max(0, progress));
 
   return (
-    <svg aria-hidden viewBox="0 0 80 80" className="h-20 w-20 drop-shadow">
+    <svg aria-hidden viewBox="0 0 80 80" className={`${className} drop-shadow`}>
       <circle cx="40" cy="40" r={RADIUS} fill="none" strokeWidth="7" className={TRACK[phase]} />
       <circle
         cx="40"
