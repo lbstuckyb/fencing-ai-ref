@@ -17,8 +17,8 @@ import {
   wrongArm,
 } from '../signals/drill';
 import type { DrillState } from '../signals/drill';
+import { getCalibratedSpec, getCalibratedSpecs } from '../signals/calibration';
 import type { SignalSpec } from '../signals/evaluator';
-import { SIGNAL_SPECS, signalSpec } from '../signals/specs';
 
 /**
  * Mode 1 — the signal practice drill, and the app's first shippable half.
@@ -40,16 +40,22 @@ import { SIGNAL_SPECS, signalSpec } from '../signals/specs';
 /** Query parameter carrying the pinned signal — the reference page's link in. */
 const SIGNAL_PARAM = 'signal';
 
-function initialDrill(id: string | null): DrillState {
-  const spec = id ? signalSpec(id) : undefined;
-  const drill = createDrill();
+function initialDrill(id: string | null, pool: readonly SignalSpec[]): DrillState {
+  const spec = id ? getCalibratedSpec(id) : undefined;
+  const drill = createDrill({ pool });
   return spec ? chooseSignal(drill, spec) : drill;
 }
 
 export default function PracticeSignals() {
   const [params, setParams] = useSearchParams();
 
-  const [drill, setDrill] = useState<DrillState>(() => initialDrill(params.get(SIGNAL_PARAM)));
+  // Computed once per mount: a recording saved on `/calibrate-signals` takes
+  // effect on the next visit here, not live underneath a running drill.
+  const calibratedSpecs = useMemo(() => getCalibratedSpecs(), []);
+
+  const [drill, setDrill] = useState<DrillState>(() =>
+    initialDrill(params.get(SIGNAL_PARAM), calibratedSpecs)
+  );
   /**
    * The same drill, mirrored into a ref. `onFrame` is called from the detection
    * loop, which holds the callback identity it was given when the camera
@@ -75,9 +81,13 @@ export default function PracticeSignals() {
       // `frame.timestampMs` is the same monotonic clock the loop feeds MediaPipe,
       // so the hold machine measures against the times detection actually ran at
       // rather than against when React got round to re-rendering.
-      apply(advanceDrill(drillRef.current, measure(frame.world, hands), frame.timestampMs));
+      apply(
+        advanceDrill(drillRef.current, measure(frame.world, hands), frame.timestampMs, {
+          pool: calibratedSpecs,
+        })
+      );
     },
-    [apply]
+    [apply, calibratedSpecs]
   );
 
   /**
@@ -102,22 +112,22 @@ export default function PracticeSignals() {
   );
 
   const skip = useCallback(() => {
-    apply(nextSignal(drillRef.current));
+    apply(nextSignal(drillRef.current, { pool: calibratedSpecs }));
     // Back to random prompts, so the URL must stop pinning one.
     setParams({}, { replace: true });
-  }, [apply, setParams]);
+  }, [apply, setParams, calibratedSpecs]);
 
   const { prompt, evaluation, attempt, hold } = drill;
 
   // Re-rendered every detected frame, so the ten-card picker is kept out of it.
   const picker = useMemo(
     () =>
-      SIGNAL_SPECS.map((spec) => (
+      calibratedSpecs.map((spec) => (
         <li key={spec.id}>
           <SignalCard spec={spec} selected={spec === prompt.spec} onSelect={choose} />
         </li>
       )),
-    [prompt.spec, choose]
+    [calibratedSpecs, prompt.spec, choose]
   );
 
   const overlay = (
