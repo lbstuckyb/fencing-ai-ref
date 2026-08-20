@@ -34,8 +34,18 @@ import { SIGNAL_SPECS } from '../signals/specs';
  */
 const RECORD_MS = 3000;
 
+/**
+ * A get-ready beat before capture starts. Recording used to begin the instant
+ * "Record" was clicked, which meant the first frames — while a hand was still
+ * on the mouse and the body hadn't moved yet — were part of the 3 s median.
+ * This gives a visible 3…2…1 on screen instead, so the referee knows exactly
+ * when the window opens.
+ */
+const COUNTDOWN_MS = 3000;
+
 type RecordPhase =
   | { phase: 'idle' }
+  | { phase: 'countdown'; remainingMs: number }
   | { phase: 'recording'; elapsedMs: number }
   | { phase: 'review'; calibration: SignalCalibration };
 
@@ -146,32 +156,53 @@ export default function CalibrateSignals() {
   const [record, setRecord] = useState<RecordPhase>({ phase: 'idle' });
 
   const recorderRef = useRef<Recorder | null>(null);
+  /** Set to the first frame's timestamp once a countdown begins, cleared after. */
+  const countdownStartRef = useRef<number | null>(null);
   const lastWorldRef = useRef<WorldPoint[]>([]);
   const lastShapesRef = useRef<Record<Side, HandShape | null>>({ left: null, right: null });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const twoArmed = useMemo(() => usesBothArms(selectedSpec), [selectedSpec]);
 
+  const busy = record.phase === 'countdown' || record.phase === 'recording';
+
   const selectSignal = useCallback(
     (spec: SignalSpec) => {
-      if (record.phase === 'recording') return;
+      if (busy) return;
       setSelectedSpec(spec);
       setSelectedSide('right');
       setRecord({ phase: 'idle' });
     },
-    [record.phase]
+    [busy]
   );
 
   const chooseSide = useCallback(
     (side: Side) => {
-      if (record.phase === 'recording') return;
+      if (busy) return;
       setSelectedSide(side);
     },
-    [record.phase]
+    [busy]
   );
 
   const onFrame = useCallback(
     (frame: PoseFrame, handFrame: HandFrame | null) => {
+      if (record.phase === 'countdown') {
+        // Anchor the countdown to frame timestamps, not wall-clock time, so it
+        // tracks the same clock the recording itself is measured against.
+        countdownStartRef.current ??= frame.timestampMs;
+        const remainingMs = COUNTDOWN_MS - (frame.timestampMs - countdownStartRef.current);
+
+        if (remainingMs > 0) {
+          setRecord({ phase: 'countdown', remainingMs });
+          return;
+        }
+
+        countdownStartRef.current = null;
+        recorderRef.current = createRecorder();
+        setRecord({ phase: 'recording', elapsedMs: 0 });
+        return;
+      }
+
       const recorder = recorderRef.current;
       if (!recorder) return;
 
@@ -204,15 +235,16 @@ export default function CalibrateSignals() {
         },
       });
     },
-    [selectedSpec, selectedSide, twoArmed]
+    [record.phase, selectedSpec, selectedSide, twoArmed]
   );
 
   const startRecording = useCallback(() => {
-    recorderRef.current = createRecorder();
-    setRecord({ phase: 'recording', elapsedMs: 0 });
+    countdownStartRef.current = null;
+    setRecord({ phase: 'countdown', remainingMs: COUNTDOWN_MS });
   }, []);
 
   const cancelRecording = useCallback(() => {
+    countdownStartRef.current = null;
     recorderRef.current = null;
     setRecord({ phase: 'idle' });
   }, []);
@@ -238,13 +270,18 @@ export default function CalibrateSignals() {
     });
   }, []);
 
-  // A recording in progress is tied to a session that just ended; a completed
-  // review is still worth reading, same as `/calibrate`'s finished recording.
-  const onRunningChange = useCallback((running: boolean) => {
-    if (running || !recorderRef.current) return;
-    recorderRef.current = null;
-    setRecord({ phase: 'idle' });
-  }, []);
+  // A countdown or recording in progress is tied to a session that just ended;
+  // a completed review is still worth reading, same as `/calibrate`'s finished
+  // recording.
+  const onRunningChange = useCallback(
+    (running: boolean) => {
+      if (running || !busy) return;
+      countdownStartRef.current = null;
+      recorderRef.current = null;
+      setRecord({ phase: 'idle' });
+    },
+    [busy]
+  );
 
   const exportStore = useCallback(() => {
     const blob = new Blob([JSON.stringify(store, null, 2)], { type: 'application/json' });
@@ -336,7 +373,7 @@ export default function CalibrateSignals() {
                 type="button"
                 onClick={() => chooseSide(side)}
                 aria-pressed={selectedSide === side}
-                disabled={record.phase === 'recording'}
+                disabled={busy}
                 className={`${TOGGLE_BASE} ${selectedSide === side ? TOGGLE_ON : TOGGLE_OFF}`}
               >
                 {side === 'right' ? 'Right arm' : 'Left arm'}
@@ -354,14 +391,37 @@ export default function CalibrateSignals() {
         onFrame={onFrame}
         onRunningChange={onRunningChange}
         needsHands={selectedSpec.needsHands}
+        overlay={
+          record.phase === 'countdown' ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/40">
+              <p className="text-lg font-medium uppercase tracking-wide text-white/80">
+                Get ready…
+              </p>
+              <p aria-hidden className="text-8xl font-bold leading-none text-white drop-shadow">
+                {Math.ceil(record.remainingMs / 1000)}
+              </p>
+            </div>
+          ) : record.phase === 'recording' ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+              <p className="rounded-full bg-rose-600 px-4 py-1.5 text-lg font-semibold text-white shadow-lg">
+                ● Recording
+              </p>
+              <p aria-hidden className="text-6xl font-bold leading-none text-white drop-shadow">
+                {((RECORD_MS - record.elapsedMs) / 1000).toFixed(1)}s
+              </p>
+            </div>
+          ) : null
+        }
       >
-        {record.phase === 'recording' ? (
+        {busy ? (
           <>
             <span
               role="status"
-              className="rounded-md bg-rose-600 px-3 py-1.5 text-sm font-medium text-white"
+              className="rounded-md bg-slate-800/80 px-3 py-1.5 text-sm font-medium text-white"
             >
-              Recording… {(record.elapsedMs / 1000).toFixed(1)} s
+              {record.phase === 'countdown'
+                ? `Starts in ${Math.ceil(record.remainingMs / 1000)}…`
+                : `Recording… ${(record.elapsedMs / 1000).toFixed(1)} s`}
             </span>
             <button
               type="button"
