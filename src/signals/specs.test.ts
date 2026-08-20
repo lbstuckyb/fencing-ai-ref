@@ -237,6 +237,36 @@ describe('discrimination', () => {
     expect(failed).toContain('wrist.forward.R');
   });
 
+  it('leaves a gap between Simultaneous and Nothing instead of overlapping', () => {
+    // Regression for a brute-force-found bug: interpolating between the two
+    // fixtures on wrist height alone used to land poses that passed *both*
+    // signals at once (~0.28-0.30 torso, where Simultaneous's floor and
+    // Nothing's ceiling touched). The seam must now belong to neither.
+    for (const t of [0.42, 0.44, 0.46, 0.48]) {
+      const arm: ArmSpec = {
+        upper: {
+          elevation:
+            SIMULTANEOUS_ARM.upper.elevation +
+            t * (NOTHING_ARM.upper.elevation - SIMULTANEOUS_ARM.upper.elevation),
+          azimuth:
+            SIMULTANEOUS_ARM.upper.azimuth +
+            t * (NOTHING_ARM.upper.azimuth - SIMULTANEOUS_ARM.upper.azimuth),
+        },
+        forearm: {
+          elevation:
+            SIMULTANEOUS_ARM.forearm!.elevation +
+            t * (NOTHING_ARM.forearm!.elevation - SIMULTANEOUS_ARM.forearm!.elevation),
+          azimuth:
+            SIMULTANEOUS_ARM.forearm!.azimuth +
+            t * (NOTHING_ARM.forearm!.azimuth - SIMULTANEOUS_ARM.forearm!.azimuth),
+        },
+      };
+      const seam = frame(bothArms(arm));
+
+      expect(passing(seam)).toEqual([]);
+    }
+  });
+
   it('never calls a signal on a referee standing at rest', () => {
     // Arms at the sides satisfy every other constraint Nothing has — straight,
     // below the waist, level with each other — so without the forward reach the

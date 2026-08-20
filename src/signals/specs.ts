@@ -457,8 +457,8 @@ export const SIMULTANEOUS: SignalSpec = coreSpec({
   constraints: [
     elbow('R', CONVERGED_ARM, { feedback: 'Extend both arms forward' }),
     elbow('L', CONVERGED_ARM, { feedback: 'Extend both arms forward' }),
-    wristHeight('R', [0.28, 0.74], { feedback: 'Hold both hands at chest height' }),
-    wristHeight('L', [0.28, 0.74], { feedback: 'Hold both hands at chest height' }),
+    wristHeight('R', [0.33, 0.74], { feedback: 'Hold both hands at chest height' }),
+    wristHeight('L', [0.33, 0.74], { feedback: 'Hold both hands at chest height' }),
     wristForward('R', [0.4, null], { feedback: 'Bring both arms out in front of you' }),
     wristForward('L', [0.4, null], { feedback: 'Bring both arms out in front of you' }),
     wristGap([null, 0.85], { feedback: 'Bring your hands together in front of you' }),
@@ -489,8 +489,8 @@ export const NOTHING: SignalSpec = coreSpec({
   constraints: [
     elbow('R', STRAIGHT_ARM, { feedback: 'Straighten both arms' }),
     elbow('L', STRAIGHT_ARM, { feedback: 'Straighten both arms' }),
-    wristHeight('R', [null, 0.3], { feedback: 'Lower both hands below your waist' }),
-    wristHeight('L', [null, 0.3], { feedback: 'Lower both hands below your waist' }),
+    wristHeight('R', [null, 0.25], { feedback: 'Lower both hands below your waist' }),
+    wristHeight('L', [null, 0.25], { feedback: 'Lower both hands below your waist' }),
     wristForward('R', [0.35, null], {
       feedback: 'Reach both arms forward, not down at your sides',
     }),
