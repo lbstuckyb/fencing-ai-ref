@@ -101,6 +101,120 @@ export function signalLabel(id: CoreSignalId): string {
 }
 
 /* -------------------------------------------------------------------------- */
+/* All twenty t.63 signals — reference page                                   */
+/* -------------------------------------------------------------------------- */
+
+/** The four groupings t.63/Figure 3 itself uses, in rulebook order. */
+export type SignalGroup = 'preparatory' | 'phrase_analysis' | 'awarding' | 'administrative';
+
+export const SIGNAL_GROUP_LABELS: Record<SignalGroup, string> = {
+  preparatory: 'Preparatory',
+  phrase_analysis: 'Phrase analysis',
+  awarding: 'Awarding',
+  administrative: 'Administrative',
+};
+
+/**
+ * The ten signals outside the graded core: procedural calls (On guard, Ready?,
+ * Play), phrase-analysis calls with no distinct gesture to grade yet (Incorrect,
+ * No), and administrative signals (a shown card, a declared winner). Reference
+ * page only — `signals/specs.ts` has no `SignalSpec` for any of these, so
+ * `/practice` cannot drill them.
+ */
+export interface ReferenceSignal {
+  id: string;
+  label: string;
+  description: string;
+}
+
+export const REFERENCE_SIGNALS: readonly ReferenceSignal[] = [
+  {
+    id: 'on_guard',
+    label: 'On guard',
+    description: 'Signals the fencers to take the on-guard position before the phrase begins.',
+  },
+  {
+    id: 'ready',
+    label: 'Ready?',
+    description: 'Asks both fencers whether they are ready to fence.',
+  },
+  {
+    id: 'play',
+    label: 'Play',
+    description: 'Starts the phrase: the fencers may now fence.',
+  },
+  {
+    id: 'incorrect',
+    label: 'Incorrect',
+    description:
+      "Marks that a fencer's action was incorrectly performed, without awarding a touch.",
+  },
+  {
+    id: 'no',
+    label: 'No',
+    description:
+      "Rejects a fencer's request — for example, an appeal to stop the phrase or claim a touch.",
+  },
+  {
+    id: 'hit_for_each',
+    label: 'Hit for each',
+    description:
+      'Awards the touch to both fencers, distinct from the priority-resolved Double hit call.',
+  },
+  {
+    id: 'technical_touch',
+    label: 'Technical touch',
+    description:
+      'Awards a touch caused by a material or apparatus fault rather than a fencing action.',
+  },
+  {
+    id: 'changing_decision',
+    label: 'Changing decision',
+    description:
+      'Reverses a previous call, typically after consulting the jury or reviewing video.',
+  },
+  {
+    id: 'card',
+    label: 'Card',
+    description:
+      'Shows a yellow, red or black card: a warning, a penalty touch, or exclusion from the competition.',
+  },
+  {
+    id: 'winner',
+    label: 'Winner',
+    description: 'Declares the winner of the bout.',
+  },
+] as const;
+
+/**
+ * All twenty t.63 signals, grouped and in rulebook order — the spine of the
+ * reference page. An id resolves against `signals/specs.ts` (graded) or
+ * `REFERENCE_SIGNALS` above (not graded), never both.
+ */
+export const SIGNAL_GROUPS: readonly { id: string; group: SignalGroup }[] = [
+  { id: 'on_guard', group: 'preparatory' },
+  { id: 'ready', group: 'preparatory' },
+  { id: 'play', group: 'preparatory' },
+  { id: 'halt', group: 'preparatory' },
+  { id: 'point_in_line', group: 'phrase_analysis' },
+  { id: 'attack', group: 'phrase_analysis' },
+  { id: 'parry', group: 'phrase_analysis' },
+  { id: 'incorrect', group: 'phrase_analysis' },
+  { id: 'no', group: 'phrase_analysis' },
+  { id: 'hit_scored', group: 'awarding' },
+  { id: 'hit_against', group: 'awarding' },
+  { id: 'not_valid', group: 'awarding' },
+  { id: 'double_hit', group: 'awarding' },
+  { id: 'hit_for_each', group: 'awarding' },
+  { id: 'simultaneous', group: 'awarding' },
+  { id: 'nothing', group: 'awarding' },
+  { id: 'technical_touch', group: 'administrative' },
+  { id: 'changing_decision', group: 'administrative' },
+  { id: 'card', group: 'administrative' },
+  { id: 'winner', group: 'administrative' },
+] as const;
+
+/* -------------------------------------------------------------------------- */
 /* Weapon rules                                                               */
 /* -------------------------------------------------------------------------- */
 
