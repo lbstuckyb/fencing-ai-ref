@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "fetch-assets": "node scripts/fetch-assets.mjs",
+    "make-scenarios": "node scripts/make-placeholder-scenarios.mjs",
     "postinstall": "node scripts/fetch-assets.mjs",
     "preview": "vite preview",
     "test": "vitest run",
