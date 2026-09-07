@@ -29,15 +29,19 @@ npm run make-scenarios     # generates placeholder /scenarios clips (needs ffmpe
 
 `npm run make-scenarios` is optional: without it, `/scenarios` still works but
 shows a "clip isn't available locally" message in place of the video for each
-scenario instead of a broken page.
+scenario instead of a broken page. The call itself can still be made and graded
+against the answer key with no clip at all.
 
 ## What's here
 
 - `/practice` — drill one signal at a time (or all ten at random); each attempt is
   graded live against the held pose.
-- `/scenarios` — **watch → call → grade**: watch a short clip of a phrase, then
-  call the full sequence of signals from memory against the camera, and get a
-  step-by-step verdict against an authored answer key.
+- `/scenarios` — **ready → countdown → live → graded**: opening a scenario brings
+  the camera up as a self-view beside the clip, so you are already framed; press
+  play for a five-second get-ready countdown, then the clip rolls and every
+  signal you hold is captured — during the phrase, after it, and across replays
+  — until you submit and get a step-by-step verdict against an authored answer
+  key.
 - `/calibrate` and `/calibrate-signals` — record your own body's geometry for a
   signal so grading is centred on you rather than on the authored default band.
 - `/reference` — all twenty t.63 signals, ten of them gradeable here today.

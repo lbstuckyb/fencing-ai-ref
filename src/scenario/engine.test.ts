@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  advanceCall,
-  beginCall,
+  COUNTDOWN_MS,
+  advanceFrame,
+  beginCountdown,
   cameraStopped,
   createEngine,
   restart,
@@ -57,7 +58,7 @@ function feed(
   let next = state;
   for (let elapsed = 0; elapsed < ms; elapsed += STEP_MS) {
     clockRef.nowMs += STEP_MS;
-    next = advanceCall(next, measurements, clockRef.nowMs, pool);
+    next = advanceFrame(next, measurements, clockRef.nowMs, pool);
   }
   return next;
 }
@@ -75,13 +76,33 @@ const SCENARIO: Scenario = {
   explanation: 'A scenario built for engine tests.',
 };
 
+/**
+ * Runs the get-ready countdown out on rest frames, leaving the capture window
+ * open — the starting point for every capture test below.
+ */
+function openWindow(
+  clockRef: Clock,
+  scenario: Scenario = SCENARIO,
+  pool: readonly SignalSpec[] = SIGNAL_SPECS
+): EngineState {
+  const state = feed(
+    beginCountdown(createEngine(scenario)),
+    REST_FRAME,
+    COUNTDOWN_MS + STEP_MS,
+    clockRef,
+    pool
+  );
+  if (state.phase !== 'live') throw new Error('the countdown did not open the capture window');
+  return state;
+}
+
 /** A held Attack, right arm, then released — one full captured call. */
 function captureOneAttack(pool: readonly SignalSpec[] = SIGNAL_SPECS): {
   state: EngineState;
   clockRef: Clock;
 } {
   const clockRef = clock();
-  let state = beginCall(createEngine(SCENARIO));
+  let state = openWindow(clockRef, SCENARIO, pool);
   state = feed(state, ATTACK_RIGHT_FRAME, 1400, clockRef, pool);
   state = feed(state, REST_FRAME, 400, clockRef, pool);
   return { state, clockRef };
@@ -92,22 +113,91 @@ function captureOneAttack(pool: readonly SignalSpec[] = SIGNAL_SPECS): {
 /* -------------------------------------------------------------------------- */
 
 describe('phases', () => {
-  it('starts in the watch phase, with nothing captured', () => {
+  it('starts ready, with nothing captured', () => {
     const state = createEngine(SCENARIO);
-    expect(state.phase).toBe('watch');
+    expect(state.phase).toBe('ready');
     expect(state.calls).toEqual([]);
     expect(state.grade).toBeNull();
   });
 
-  it('opens the call phase once the clip ends', () => {
-    const state = beginCall(createEngine(SCENARIO));
-    expect(state.phase).toBe('call');
+  it('ignores frames while ready', () => {
+    const ready = createEngine(SCENARIO);
+    const fed = advanceFrame(ready, ATTACK_RIGHT_FRAME, 50, SIGNAL_SPECS);
+    expect(fed).toBe(ready);
   });
 
-  it('ignores frames outside the call phase', () => {
-    const watching = createEngine(SCENARIO);
-    const fed = advanceCall(watching, ATTACK_RIGHT_FRAME, 50, SIGNAL_SPECS);
-    expect(fed).toBe(watching);
+  it('ignores frames once graded', () => {
+    const clockRef = clock();
+    const graded = submitCall(openWindow(clockRef), SIGNAL_SPECS);
+    const fed = advanceFrame(graded, ATTACK_RIGHT_FRAME, clockRef.nowMs + STEP_MS, SIGNAL_SPECS);
+    expect(fed).toBe(graded);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* The get-ready countdown                                                    */
+/* -------------------------------------------------------------------------- */
+
+describe('beginCountdown', () => {
+  it('enters the countdown with the full window still to run', () => {
+    const state = beginCountdown(createEngine(SCENARIO));
+    expect(state.phase).toBe('countdown');
+    expect(state.countdownRemainingMs).toBe(COUNTDOWN_MS);
+    // Unanchored: the first frame to arrive sets the clock, so a countdown
+    // started before the camera has produced a frame loses no time.
+    expect(state.countdownStartMs).toBeNull();
+  });
+
+  it('only starts from ready', () => {
+    const clockRef = clock();
+    const live = openWindow(clockRef);
+    expect(beginCountdown(live)).toBe(live);
+  });
+
+  it('anchors the clock to the first frame, not to zero', () => {
+    // The frame clock is the camera's, and has been running since the page
+    // loaded: measuring from 0 would end the countdown on the first frame.
+    const state = advanceFrame(
+      beginCountdown(createEngine(SCENARIO)),
+      REST_FRAME,
+      120_000,
+      SIGNAL_SPECS
+    );
+    expect(state.phase).toBe('countdown');
+    expect(state.countdownStartMs).toBe(120_000);
+    expect(state.countdownRemainingMs).toBe(COUNTDOWN_MS);
+  });
+
+  it('counts down without capturing anything, then opens the window', () => {
+    const clockRef = clock();
+    let state = beginCountdown(createEngine(SCENARIO));
+
+    state = feed(state, REST_FRAME, 2000, clockRef, SIGNAL_SPECS);
+    expect(state.phase).toBe('countdown');
+    expect(state.countdownRemainingMs).toBe(COUNTDOWN_MS - 2000 + STEP_MS);
+
+    state = feed(state, REST_FRAME, COUNTDOWN_MS, clockRef, SIGNAL_SPECS);
+    expect(state.phase).toBe('live');
+    expect(state.calls).toEqual([]);
+  });
+
+  /**
+   * Getting into place is not a call. A signal that happens to be held while
+   * the numbers run down must not be credited the instant the window opens.
+   */
+  it('does not credit a signal held through the boundary', () => {
+    const clockRef = clock();
+    let state = beginCountdown(createEngine(SCENARIO));
+    state = feed(state, ATTACK_RIGHT_FRAME, COUNTDOWN_MS + STEP_MS, clockRef, SIGNAL_SPECS);
+
+    expect(state.phase).toBe('live');
+    expect(state.calls).toEqual([]);
+    expect(state.hold.phase).toBe('idle');
+
+    // It has to be held again, in full, from inside the window.
+    state = feed(state, ATTACK_RIGHT_FRAME, 1400, clockRef, SIGNAL_SPECS);
+    state = feed(state, REST_FRAME, 400, clockRef, SIGNAL_SPECS);
+    expect(state.calls).toHaveLength(1);
   });
 });
 
@@ -115,7 +205,7 @@ describe('phases', () => {
 /* Free recognition and capture                                              */
 /* -------------------------------------------------------------------------- */
 
-describe('advanceCall', () => {
+describe('advanceFrame', () => {
   it('captures a held signal without being prompted for it', () => {
     const { state } = captureOneAttack();
     expect(state.calls).toHaveLength(1);
@@ -127,9 +217,9 @@ describe('advanceCall', () => {
     expect(state.calls[0].label).toBe('Attack');
   });
 
-  it('captures more than one signal across the call phase, in order', () => {
+  it('captures more than one signal across the capture window, in order', () => {
     const clockRef = clock();
-    let state = beginCall(createEngine(SCENARIO));
+    let state = openWindow(clockRef);
     state = feed(state, ATTACK_RIGHT_FRAME, 1400, clockRef, SIGNAL_SPECS);
     state = feed(state, REST_FRAME, 400, clockRef, SIGNAL_SPECS);
     state = feed(state, ATTACK_LEFT_FRAME, 1400, clockRef, SIGNAL_SPECS);
@@ -139,11 +229,11 @@ describe('advanceCall', () => {
   });
 
   it('never recognises a signal excluded from the pool', () => {
-    // Épée excludes `attack` outright; a call phase restricted to épée's legal
-    // signals must never turn an Attack pose into a captured call.
+    // Épée excludes `attack` outright; a capture window restricted to épée's
+    // legal signals must never turn an Attack pose into a captured call.
     const pool = SIGNAL_SPECS.filter((spec) => spec.id !== 'attack');
     const clockRef = clock();
-    let state = beginCall(createEngine({ ...SCENARIO, weapon: 'epee' }));
+    let state = openWindow(clockRef, { ...SCENARIO, weapon: 'epee' }, pool);
     state = feed(state, ATTACK_RIGHT_FRAME, 1400, clockRef, pool);
 
     expect(state.calls).toEqual([]);
@@ -151,7 +241,7 @@ describe('advanceCall', () => {
 
   it('shows a quick pass with the t.63 warning still carried on the captured call', () => {
     const clockRef = clock();
-    let state = beginCall(createEngine(SCENARIO));
+    let state = openWindow(clockRef);
     state = feed(state, ATTACK_RIGHT_FRAME, 500, clockRef, SIGNAL_SPECS);
     state = feed(state, REST_FRAME, 400, clockRef, SIGNAL_SPECS);
 
@@ -167,7 +257,7 @@ describe('undoLastCall', () => {
   });
 
   it('does nothing when nothing has been captured', () => {
-    const state = beginCall(createEngine(SCENARIO));
+    const state = openWindow(clock());
     expect(undoLastCall(state)).toBe(state);
   });
 });
@@ -175,7 +265,7 @@ describe('undoLastCall', () => {
 describe('cameraStopped', () => {
   it('keeps calls already captured but drops a hold in progress', () => {
     const clockRef = clock();
-    let state = beginCall(createEngine(SCENARIO));
+    let state = openWindow(clockRef);
     state = feed(state, ATTACK_RIGHT_FRAME, 1400, clockRef, SIGNAL_SPECS);
     state = feed(state, REST_FRAME, 400, clockRef, SIGNAL_SPECS);
     // A second Attack, started but not released.
@@ -186,6 +276,22 @@ describe('cameraStopped', () => {
     expect(stopped.calls).toHaveLength(1);
     expect(stopped.hold.phase).toBe('idle');
   });
+
+  it('abandons a countdown, since its clock has stopped too', () => {
+    const clockRef = clock();
+    let state = beginCountdown(createEngine(SCENARIO));
+    state = feed(state, REST_FRAME, 2000, clockRef, SIGNAL_SPECS);
+
+    const stopped = cameraStopped(state);
+    expect(stopped.phase).toBe('ready');
+    expect(stopped.countdownRemainingMs).toBe(COUNTDOWN_MS);
+    expect(stopped.countdownStartMs).toBeNull();
+  });
+
+  it('does nothing while ready', () => {
+    const ready = createEngine(SCENARIO);
+    expect(cameraStopped(ready)).toBe(ready);
+  });
 });
 
 /* -------------------------------------------------------------------------- */
@@ -195,7 +301,7 @@ describe('cameraStopped', () => {
 describe('submitCall', () => {
   it('grades the captured sequence against the scenario', () => {
     const clockRef = clock();
-    let state = beginCall(createEngine(SCENARIO));
+    let state = openWindow(clockRef);
     state = feed(state, ATTACK_RIGHT_FRAME, 1400, clockRef, SIGNAL_SPECS);
     state = feed(state, REST_FRAME, 400, clockRef, SIGNAL_SPECS);
     state = feed(state, ATTACK_LEFT_FRAME, 1400, clockRef, SIGNAL_SPECS);
@@ -208,7 +314,7 @@ describe('submitCall', () => {
 
   it('credits a hold still in progress rather than discarding it', () => {
     const clockRef = clock();
-    let state = beginCall(createEngine(SCENARIO));
+    let state = openWindow(clockRef);
     // Held past the pass floor but never released before submitting.
     state = feed(state, ATTACK_RIGHT_FRAME, 1400, clockRef, SIGNAL_SPECS);
 
@@ -217,21 +323,22 @@ describe('submitCall', () => {
     expect(submitted.calls[0].side).toBe('right');
   });
 
-  it('does nothing outside the call phase', () => {
+  it('does nothing outside the capture window', () => {
     const state = createEngine(SCENARIO);
     expect(submitCall(state, SIGNAL_SPECS)).toBe(state);
   });
 });
 
 describe('restart', () => {
-  it('returns to a fresh watch phase for the same scenario, score discarded', () => {
+  it('returns to a fresh ready phase for the same scenario, score discarded', () => {
     const clockRef = clock();
-    let state = beginCall(createEngine(SCENARIO));
+    let state = openWindow(clockRef);
     state = feed(state, ATTACK_RIGHT_FRAME, 1400, clockRef, SIGNAL_SPECS);
     const graded = submitCall(state, SIGNAL_SPECS);
 
     const fresh = restart(graded);
-    expect(fresh.phase).toBe('watch');
+    expect(fresh.phase).toBe('ready');
+    expect(fresh.countdownRemainingMs).toBe(COUNTDOWN_MS);
     expect(fresh.calls).toEqual([]);
     expect(fresh.grade).toBeNull();
     expect(fresh.scenario).toBe(SCENARIO);

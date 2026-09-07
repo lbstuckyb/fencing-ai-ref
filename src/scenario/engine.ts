@@ -2,23 +2,30 @@
  * The scenario call phase, as a pure reducer — `signals/drill.ts`'s sibling for
  * Mode 2.
  *
- * t.63 requires each signal to be held 1–2 seconds, but a fencing phrase
- * resolves in well under a second: there is no room to signal live against a
- * playing clip. So Mode 2 does not try to. The loop is **watch → call →
- * grade**, exactly as the plan states it:
+ * The loop is **ready → countdown → live → graded**:
  *
- * 1. `watch` — the clip plays start to finish. Playback itself belongs to a
- *    `<video>` element and the page that hosts one; this file has nothing to
- *    say about it until the clip ends.
- * 2. `call` — the video is done, the camera is live, and the referee gives the
- *    *full sequence* of signals, each held properly. This is where this file's
- *    logic lives: every frame is graded freely against whichever weapon-legal
- *    signal it best matches — `evaluator.bestMatch` was written with exactly
- *    this free-recognition use in mind — and the same hold machine that
- *    enforces t.63 in the practice drill turns a stream of matches into
+ * 1. `ready` — the camera is already up and showing a self-view, and the clip
+ *    is loaded but not playing. Nothing is captured. Playback itself belongs to
+ *    a `<video>` element and the page that hosts one; this file has nothing to
+ *    say about it.
+ * 2. `countdown` — a five-second get-ready window, ticked by the detection
+ *    frames themselves rather than a timer, so it runs on the same clock the
+ *    holds are measured against and stops dead if the camera does.
+ * 3. `live` — the capture window, open from the end of the countdown until the
+ *    referee submits. Every frame is graded freely against whichever
+ *    weapon-legal signal it best matches — `evaluator.bestMatch` was written
+ *    with exactly this free-recognition use in mind — and the same hold machine
+ *    that enforces t.63 in the practice drill turns a stream of matches into
  *    discrete, held signals, appended to an ordered list as they complete.
- * 3. `graded` — submitting closes the phase and runs `grading.ts` once against
+ * 4. `graded` — submitting closes the window and runs `grading.ts` once against
  *    the captured list.
+ *
+ * t.63 requires each signal to be held 1–2 seconds while a fencing phrase
+ * resolves in well under a second, so the capture window is deliberately open
+ * *during* playback rather than gated behind it: a call started as the action
+ * happens still takes about a second to complete, which means in practice most
+ * calls land after the action — which is exactly how a referee works. Replaying
+ * the clip changes nothing here; the window stays open either way.
  *
  * Unlike the practice drill there is no prompt to grade a frame against: the
  * referee is calling a whole phrase from memory, and the app's job is only to
@@ -67,59 +74,96 @@ function labelFor(pool: readonly SignalSpec[], signalId: string): string {
 /* State                                                                      */
 /* -------------------------------------------------------------------------- */
 
-export type EnginePhase = 'watch' | 'call' | 'graded';
+export type EnginePhase = 'ready' | 'countdown' | 'live' | 'graded';
+
+/** The get-ready window between pressing play and the capture window opening. */
+export const COUNTDOWN_MS = 5000;
 
 export interface EngineState {
   scenario: Scenario;
   phase: EnginePhase;
   stability: Stability;
   hold: HoldState;
-  /** This frame's best-matching signal, for live "here is what I see" feedback. `null` outside the call phase. */
+  /** This frame's best-matching signal, for live "here is what I see" feedback. `null` outside the live phase. */
   evaluation: Evaluation | null;
   /** Progress toward the hold requirement, 0–1, for the ring. */
   progress: number;
+  /**
+   * The frame timestamp the countdown was anchored to, set by its first frame.
+   * Held in state rather than a ref so the countdown stays part of the pure
+   * reducer — and therefore testable — instead of living in the page.
+   */
+  countdownStartMs: number | null;
+  /** What the countdown overlay renders, in milliseconds. */
+  countdownRemainingMs: number;
   calls: CapturedCall[];
-  /** Set once the call phase has been submitted. */
+  /** Set once the capture window has been submitted. */
   grade: ScenarioGrade | null;
 }
 
-/** A fresh engine, watching the clip. */
+/** A fresh engine: camera warming up, clip loaded, nothing captured. */
 export function createEngine(scenario: Scenario): EngineState {
   return {
     scenario,
-    phase: 'watch',
+    phase: 'ready',
     stability: idleStability(),
     hold: idleHold(),
     evaluation: null,
     progress: 0,
-    calls: [],
-    grade: null,
-  };
-}
-
-/** The clip has finished: open the call phase. */
-export function beginCall(state: EngineState): EngineState {
-  return {
-    ...state,
-    phase: 'call',
-    stability: idleStability(),
-    hold: idleHold(),
-    evaluation: null,
-    progress: 0,
+    countdownStartMs: null,
+    countdownRemainingMs: COUNTDOWN_MS,
     calls: [],
     grade: null,
   };
 }
 
 /**
- * The camera stopped mid-call. The calls already captured are kept — they are
- * complete, held signals, not affected by what happens after them — but a hold
- * in progress is dropped rather than concluded, for the same reason
- * `drill.ts`'s `stopDrill` drops one: crediting a signal because the camera was
- * switched off mid-gesture would be scoring the button press.
+ * The referee pressed play: start the get-ready countdown.
+ *
+ * The clock is left unanchored — `advanceFrame` anchors it to the first frame
+ * that arrives, so a countdown started before the camera has produced a frame
+ * simply waits rather than losing time it never got to show.
+ */
+export function beginCountdown(state: EngineState): EngineState {
+  if (state.phase !== 'ready') return state;
+  return {
+    ...state,
+    phase: 'countdown',
+    stability: idleStability(),
+    hold: idleHold(),
+    evaluation: null,
+    progress: 0,
+    countdownStartMs: null,
+    countdownRemainingMs: COUNTDOWN_MS,
+    calls: [],
+    grade: null,
+  };
+}
+
+/**
+ * The camera stopped.
+ *
+ * A countdown whose clock has stopped is not a countdown, so it drops back to
+ * `ready` and is pressed again. Mid-capture, the calls already captured are
+ * kept — they are complete, held signals, not affected by what happens after
+ * them — but a hold in progress is dropped rather than concluded, for the same
+ * reason `drill.ts`'s `stopDrill` drops one: crediting a signal because the
+ * camera was switched off mid-gesture would be scoring the button press.
  */
 export function cameraStopped(state: EngineState): EngineState {
-  if (state.phase !== 'call') return state;
+  if (state.phase === 'countdown') {
+    return {
+      ...state,
+      phase: 'ready',
+      stability: idleStability(),
+      hold: idleHold(),
+      evaluation: null,
+      progress: 0,
+      countdownStartMs: null,
+      countdownRemainingMs: COUNTDOWN_MS,
+    };
+  }
+  if (state.phase !== 'live') return state;
   return { ...state, stability: idleStability(), hold: idleHold(), evaluation: null, progress: 0 };
 }
 
@@ -128,21 +172,49 @@ export function cameraStopped(state: EngineState): EngineState {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Folds one detected frame into the call phase.
+ * Folds one detected frame into the countdown or the capture window.
  *
  * `pool` is the weapon-legal, calibrated spec list — computed by the caller,
  * same as the practice drill's `options.pool`, so a signal épée does not
  * recognise is never offered to `bestMatch` in the first place rather than
  * being caught after the fact. `nowMs` is the frame's own timestamp, the same
  * monotonic clock the hold machine measures every drill against.
+ *
+ * Outside those two phases the state is returned *by reference*, so the page's
+ * `setEngine` gets an identical object and React bails out rather than
+ * re-rendering twenty times a second while nothing is being captured.
  */
-export function advanceCall(
+export function advanceFrame(
   state: EngineState,
   measurements: Measurements,
   nowMs: number,
   pool: readonly SignalSpec[]
 ): EngineState {
-  if (state.phase !== 'call') return state;
+  if (state.phase === 'countdown') {
+    // Anchored to the frame's own timestamp, not wall-clock, exactly as
+    // CalibrateSignals anchors its record countdown.
+    const startMs = state.countdownStartMs ?? nowMs;
+    const remainingMs = COUNTDOWN_MS - (nowMs - startMs);
+
+    if (remainingMs > 0) {
+      return { ...state, countdownStartMs: startMs, countdownRemainingMs: remainingMs };
+    }
+
+    // Idle hold and stability, so a gesture made while getting into place
+    // cannot bleed into the first call.
+    return {
+      ...state,
+      phase: 'live',
+      stability: idleStability(),
+      hold: idleHold(),
+      evaluation: null,
+      progress: 0,
+      countdownStartMs: null,
+      countdownRemainingMs: 0,
+    };
+  }
+
+  if (state.phase !== 'live') return state;
 
   const evaluation = bestMatch(pool, measurements);
   const stability = advanceStability(state.stability, evaluation);
@@ -179,19 +251,19 @@ export function advanceCall(
 
 /** The referee misspoke and wants to drop the last captured call before submitting. */
 export function undoLastCall(state: EngineState): EngineState {
-  if (state.phase !== 'call' || state.calls.length === 0) return state;
+  if (state.phase !== 'live' || state.calls.length === 0) return state;
   return { ...state, calls: state.calls.slice(0, -1) };
 }
 
 /**
- * Closes the call phase and grades what was captured.
+ * Closes the capture window and grades what was captured.
  *
  * A hold still in progress is credited by `finishHold` — the same rule the
  * practice drill's camera-stop path uses — rather than being discarded for
  * want of a release the referee pre-empted by submitting.
  */
 export function submitCall(state: EngineState, pool: readonly SignalSpec[]): EngineState {
-  if (state.phase !== 'call') return state;
+  if (state.phase !== 'live') return state;
 
   const finished = finishHold(state.hold, DEFAULT_HOLD_OPTIONS);
   const completed = justCompleted(state.hold, finished);
@@ -219,7 +291,10 @@ export function submitCall(state: EngineState, pool: readonly SignalSpec[]): Eng
   };
 }
 
-/** Back to the top of the clip, score discarded — a fresh attempt at the same scenario. */
+/**
+ * Back to `ready`, score discarded — a fresh attempt at the same scenario. The
+ * camera is not touched: it is the page's, and stays live across a retry.
+ */
 export function restart(state: EngineState): EngineState {
   return createEngine(state.scenario);
 }

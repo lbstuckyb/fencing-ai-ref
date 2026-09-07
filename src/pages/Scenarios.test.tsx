@@ -1,7 +1,8 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import Scenarios from './Scenarios';
+import { COUNTDOWN_MS } from '../scenario/engine';
 import type { HandFrame, PoseFrame, WorldPoint } from '../cv/types';
 import { ARM_DOWN, ARM_LATERAL, makePose } from '../test/poseFixtures';
 import type { ArmSpec } from '../test/poseFixtures';
@@ -148,16 +149,44 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-async function startCamera() {
-  await userEvent.click(screen.getByRole('button', { name: /start camera/i }));
+/**
+ * Opens a scenario from the bank. The card click is also the gesture the camera
+ * permission prompt needs, so the camera comes up on the back of it — no
+ * "Start camera" button is ever shown here.
+ */
+async function openScenario(name: RegExp) {
+  await userEvent.click(screen.getByRole('button', { name }));
   await screen.findByRole('button', { name: /stop camera/i });
+  expect(screen.queryByRole('button', { name: /start camera/i })).not.toBeInTheDocument();
 }
 
-/** Ends the currently-playing clip, which is what opens the call phase. */
-function endClip() {
-  const video = document.querySelector('video');
-  if (!video) throw new Error('no <video> is mounted — not in the watch phase');
-  fireEvent.ended(video);
+/**
+ * Arms the call and runs the five-second countdown out on rest frames. The
+ * countdown is ticked by camera frames, so this is also what proves the clock
+ * behind it is the detection loop's.
+ */
+async function armAndGetReady(clock: { hold: (pose: WorldPoint[], ms: number) => Promise<void> }) {
+  await userEvent.click(screen.getByRole('button', { name: /play the phrase/i }));
+  expect(screen.getByRole('status')).toHaveTextContent(/starts in 5/i);
+  await clock.hold(REST, COUNTDOWN_MS + 50);
+}
+
+/**
+ * The scenario clip, told apart from the camera's own `<video>` by its `src` —
+ * the camera attaches a stream through `srcObject` and sets no attribute.
+ * `play` is stubbed on the prototype for every media element, so watching the
+ * clip's own playback means giving it its own spy.
+ */
+function clipVideo(): HTMLVideoElement {
+  const clip = document.querySelector<HTMLVideoElement>('video[src]');
+  if (!clip) throw new Error('the scenario clip is not mounted');
+  return clip;
+}
+
+function spyOnClipPlayback() {
+  const play = vi.fn().mockResolvedValue(undefined);
+  clipVideo().play = play;
+  return play;
 }
 
 function callsList(): string[] {
@@ -193,24 +222,31 @@ describe('Scenarios bank', () => {
   });
 });
 
-describe('watch → call → grade', () => {
-  it('plays the clip, opens the call phase on end, and grades a fully correct phrase', async () => {
+describe('ready → countdown → live → graded', () => {
+  it('counts down, rolls the clip itself, and grades a fully correct phrase', async () => {
     const clock = driveAnimationFrames();
     render(<Scenarios />);
 
-    await userEvent.click(screen.getByRole('button', { name: /Attack right, unopposed/ }));
-    expect(document.querySelector('video')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /start camera/i })).not.toBeInTheDocument();
+    await openScenario(/Attack right, unopposed/);
+    const play = spyOnClipPlayback();
+    // The clip waits for the countdown; opening a scenario does not start it.
+    expect(play).not.toHaveBeenCalled();
+    // Nothing is being captured yet, so there is no readout to read.
+    expect(screen.queryByText('No signal recognised yet')).not.toBeInTheDocument();
 
-    endClip();
-    expect(await screen.findByRole('button', { name: /start camera/i })).toBeInTheDocument();
+    await armAndGetReady(clock);
 
-    await startCamera();
+    // Zero: the page starts playback, and the capture window is open.
+    expect(play).toHaveBeenCalled();
     expect(screen.getByText('No signal recognised yet')).toBeInTheDocument();
 
     await clock.hold(ATTACK_RIGHT, 1400);
     await clock.hold(REST, 400);
     expect(callsList()).toEqual([expect.stringMatching(/1\.\s*Attack — right arm/)]);
+
+    // A replay mid-call must not reset or re-arm anything.
+    await userEvent.click(screen.getByRole('button', { name: 'Replay' }));
+    expect(callsList()).toHaveLength(1);
 
     await clock.hold(HIT_SCORED_RIGHT, 1400);
     await clock.hold(REST, 400);
@@ -226,18 +262,40 @@ describe('watch → call → grade', () => {
     expect(screen.getByText(/Attack with your right arm — correct\./)).toBeInTheDocument();
     expect(screen.getByText(/Hit scored with your right arm — correct\./)).toBeInTheDocument();
 
-    // Try again returns to the watch phase for another attempt at the same clip.
+    // Try again is ready for another attempt with the camera still live — no
+    // second permission prompt, and the arm button back.
     await userEvent.click(screen.getByRole('button', { name: /try again/i }));
-    expect(document.querySelector('video')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /play the phrase/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /stop camera/i })).toBeInTheDocument();
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * The countdown exists so that finding your framing is not mistaken for a
+   * call. A signal held all the way through it must be worth nothing.
+   */
+  it('captures nothing held during the countdown', async () => {
+    const clock = driveAnimationFrames();
+    render(<Scenarios />);
+
+    await openScenario(/Attack right, unopposed/);
+    await userEvent.click(screen.getByRole('button', { name: /play the phrase/i }));
+
+    await clock.hold(ATTACK_RIGHT, COUNTDOWN_MS + 50);
+
+    expect(screen.getByText(/nothing called yet/i)).toBeInTheDocument();
+    // And the hold has to be given again, in full, from inside the window.
+    await clock.hold(ATTACK_RIGHT, 1400);
+    await clock.hold(REST, 400);
+    expect(callsList()).toHaveLength(1);
   });
 
   it('drops the last call on undo before submitting', async () => {
     const clock = driveAnimationFrames();
     render(<Scenarios />);
 
-    await userEvent.click(screen.getByRole('button', { name: /Attack right, unopposed/ }));
-    endClip();
-    await startCamera();
+    await openScenario(/Attack right, unopposed/);
+    await armAndGetReady(clock);
 
     await clock.hold(ATTACK_RIGHT, 1400);
     await clock.hold(REST, 400);
@@ -253,9 +311,8 @@ describe('the legal call vocabulary follows the weapon', () => {
     const clock = driveAnimationFrames();
     render(<Scenarios />);
 
-    await userEvent.click(screen.getByRole('button', { name: /Both lights, inside the lockout/ }));
-    endClip();
-    await startCamera();
+    await openScenario(/Both lights, inside the lockout/);
+    await armAndGetReady(clock);
 
     // Attack is excluded from épée's legal palette (data/rules.ts), so this
     // pose must never be recognised, however long it is held.

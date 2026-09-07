@@ -12,7 +12,9 @@ import type { HandFrame, PoseFrame } from '../cv/types';
  * The camera does not start on mount. A page that opens a webcam the instant it
  * loads is hostile, and the app claims on the Home page that the camera is only
  * on while you are drilling — so starting is an explicit act, and stopping
- * genuinely releases the device.
+ * genuinely releases the device. `autoStart` moves *which* act starts it, not
+ * whether there is one: /scenarios opens the camera on the scenario-card click,
+ * which is the gesture the permission prompt wants anyway.
  *
  * Failure handling is most of this component on purpose. A denied permission or
  * an absent camera is the *first* thing many users will hit, and an unhandled
@@ -148,6 +150,22 @@ export interface CameraStageProps {
   overlay?: ReactNode;
   /** Draw the tracked skeleton over the video. On by default. */
   showSkeleton?: boolean;
+  /**
+   * Start the camera on mount instead of waiting for the "Start camera" button.
+   *
+   * Only for a page whose *own* opening gesture was the user asking for the
+   * camera — the scenario card click that the permission prompt needs. A page
+   * that mounts this on load would be exactly the hostile thing this component
+   * otherwise refuses to do.
+   */
+  autoStart?: boolean;
+  /**
+   * Shrink the chrome for a narrow self-view column: no numeric fps readout,
+   * smaller text. The "no pose in frame" warning and the your-right/your-left
+   * mirror legend both stay — being out of shot and having the sides inverted
+   * are the two things a self-view exists to tell you.
+   */
+  compact?: boolean;
   /** Extra controls shown alongside the stop button while running. */
   children?: ReactNode;
 }
@@ -158,6 +176,8 @@ export default function CameraStage({
   needsHands = false,
   overlay,
   showSkeleton = true,
+  autoStart = false,
+  compact = false,
   children,
 }: CameraStageProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -400,6 +420,22 @@ export default function CameraStage({
   }, [fail]);
 
   /**
+   * `autoStart`'s one job: run the same `start` the button runs, once.
+   *
+   * `start` is stable, so this fires on mount and never again — which is what
+   * keeps a user who pressed "Stop camera" stopped rather than being restarted
+   * by their own click. It is deferred out of the effect body because `start`
+   * sets state before its first await, which inside an effect is a cascading
+   * render; `start` already guards itself against being superseded, so a
+   * component that unmounts in between simply never opens the device.
+   */
+  useEffect(() => {
+    if (!autoStart) return;
+    const pending = setTimeout(() => void start(), 0);
+    return () => clearTimeout(pending);
+  }, [autoStart, start]);
+
+  /**
    * Loads the hand model the first time a drill actually needs it.
    *
    * Deliberately not part of `start`: a practice session moves between signals,
@@ -463,13 +499,22 @@ export default function CameraStage({
               />
             ) : null}
             <div className="pointer-events-none absolute inset-0">{overlay}</div>
-            <p className="absolute left-2 top-2 rounded bg-black/60 px-2 py-1 font-mono text-xs text-white">
-              {stats.fps} fps ·{' '}
-              {stats.detections > 0
-                ? `${stats.landmarks} landmarks @ ${stats.detections}/s`
-                : 'no pose in frame'}
-              {needsHands ? ` · ${stats.hands} hand${stats.hands === 1 ? '' : 's'}` : ''}
-            </p>
+            {compact ? (
+              // Only the part a self-view needs: whether you are in shot.
+              stats.detections === 0 ? (
+                <p className="absolute left-2 top-2 rounded bg-black/60 px-2 py-0.5 font-mono text-[0.65rem] text-white">
+                  no pose in frame
+                </p>
+              ) : null
+            ) : (
+              <p className="absolute left-2 top-2 rounded bg-black/60 px-2 py-1 font-mono text-xs text-white">
+                {stats.fps} fps ·{' '}
+                {stats.detections > 0
+                  ? `${stats.landmarks} landmarks @ ${stats.detections}/s`
+                  : 'no pose in frame'}
+                {needsHands ? ` · ${stats.hands} hand${stats.hands === 1 ? '' : 's'}` : ''}
+              </p>
+            )}
 
             {handsUnavailable ? (
               <p
@@ -485,7 +530,11 @@ export default function CameraStage({
               // raise your right arm and the cyan limb must be the one that
               // moves. Sides are anatomical everywhere in this app, and a
               // silently inverted one would wreck every directional signal.
-              <p className="absolute bottom-2 left-2 flex items-center gap-3 rounded bg-black/60 px-2 py-1 text-sm text-white">
+              <p
+                className={`absolute bottom-2 left-2 flex items-center rounded bg-black/60 px-2 py-1 text-white ${
+                  compact ? 'gap-2 text-xs' : 'gap-3 text-sm'
+                }`}
+              >
                 <span className="flex items-center gap-1.5">
                   <span
                     aria-hidden
@@ -525,8 +574,10 @@ export default function CameraStage({
 
         {phase === 'starting' ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-6 text-center">
-            <p className="text-base text-slate-300">Starting camera and loading the pose model…</p>
-            <p className="text-sm text-slate-400">
+            <p className={`text-slate-300 ${compact ? 'text-sm' : 'text-base'}`}>
+              Starting camera and loading the pose model…
+            </p>
+            <p className={`text-slate-400 ${compact ? 'text-xs' : 'text-sm'}`}>
               The model is about 6 MB and is only loaded once per session.
             </p>
           </div>

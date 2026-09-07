@@ -30,7 +30,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   {
     path: '/scenarios',
     label: 'Scenarios',
-    blurb: 'Referee a clip, then call the phrase and get graded per weapon.',
+    blurb: 'Referee a clip live: call the phrase as it happens and get graded per weapon.',
   },
   {
     path: '/calibrate',

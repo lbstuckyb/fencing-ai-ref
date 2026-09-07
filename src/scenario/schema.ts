@@ -1,10 +1,10 @@
 /**
  * The scenario schema — Mode 2's answer key.
  *
- * A scenario names a clip and the sequence of calls a referee should make once
- * it finishes, per the plan's "watch → call → grade" flow: the gesture the
- * referee is graded on lives in `signals/specs.ts` already, so a step here is
- * just a pointer at one of those ids, plus which fencer it names.
+ * A scenario names a clip and the ordered sequence of calls a referee should
+ * make against it — see `engine.ts` for the loop that captures them. The
+ * gesture the referee is graded on lives in `signals/specs.ts` already, so a
+ * step here is just a pointer at one of those ids, plus which fencer it names.
  *
  * `say` is carried from day one but never graded — v2.0 is speech grading, and
  * this is the schema change that migration will not need to make. A step with

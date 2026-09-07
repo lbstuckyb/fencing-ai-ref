@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import CameraStage from './CameraStage';
@@ -292,6 +292,89 @@ describe('CameraStage', () => {
     await startCamera();
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/failed to start/i);
+  });
+});
+
+/**
+ * `autoStart` is for a page whose own opening gesture already asked for the
+ * camera — /scenarios' card click. It moves which act starts the camera; it
+ * must not weaken anything else, least of all the failure handling.
+ */
+describe('CameraStage autoStart', () => {
+  it('runs without a click, and never offers the start button', async () => {
+    const { stream } = fakeStream();
+    getUserMedia.mockResolvedValue(stream);
+
+    render(<CameraStage autoStart />);
+
+    expect(await screen.findByRole('button', { name: /stop camera/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /start camera/i })).not.toBeInTheDocument();
+  });
+
+  it('lands on the same failure panel, with the retry still on offer', async () => {
+    getUserMedia.mockRejectedValue(new DOMException('denied', 'NotAllowedError'));
+
+    render(<CameraStage autoStart />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/permission was denied/i);
+    expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
+  });
+
+  it('stays stopped once the user stops it', async () => {
+    const { stream, track } = fakeStream();
+    getUserMedia.mockResolvedValue(stream);
+
+    render(<CameraStage autoStart />);
+    await userEvent.click(await screen.findByRole('button', { name: /stop camera/i }));
+
+    expect(track.stop).toHaveBeenCalled();
+    // Back to the manual panel rather than being restarted by the effect.
+    expect(screen.getByRole('button', { name: /start camera/i })).toBeInTheDocument();
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('CameraStage compact', () => {
+  beforeEach(() => {
+    const { stream } = fakeStream();
+    getUserMedia.mockResolvedValue(stream);
+    stubCanvasContext();
+  });
+
+  it('drops the fps numbers but keeps the mirror legend', async () => {
+    getPoseDetector.mockResolvedValue({ detect: () => fakeFrame() });
+    const clock = driveAnimationFrames();
+
+    render(<CameraStage compact />);
+    await startCamera();
+    await screen.findByRole('button', { name: /stop camera/i });
+
+    // A full second of frames, so the stats readout has something to report.
+    await act(async () => {
+      clock.advance(30, 40);
+    });
+
+    expect(screen.queryByText(/fps/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/landmarks/i)).not.toBeInTheDocument();
+    // Side decides `wrong_side` in scenario grading, so the mirror check is
+    // more load-bearing in a self-view than less.
+    expect(screen.getByText('your right')).toBeInTheDocument();
+    expect(screen.getByText('your left')).toBeInTheDocument();
+  });
+
+  it('still warns when nobody is in shot', async () => {
+    getPoseDetector.mockResolvedValue({ detect: () => null });
+    const clock = driveAnimationFrames();
+
+    render(<CameraStage compact />);
+    await startCamera();
+    await screen.findByRole('button', { name: /stop camera/i });
+
+    await act(async () => {
+      clock.advance(30, 40);
+    });
+
+    expect(screen.getByText(/no pose in frame/i)).toBeInTheDocument();
   });
 });
 
