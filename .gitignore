@@ -19,3 +19,6 @@ public/scenarios/*.webm
 .idea
 *.log
 npm-debug.log*
+
+# Internal notes/docs — not for the public repo
+docs/
