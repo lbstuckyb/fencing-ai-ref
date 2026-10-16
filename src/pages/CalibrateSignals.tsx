@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import CameraStage from '../components/CameraStage';
-import PageHeader from '../components/PageHeader';
+import Hint from '../components/Hint';
+import ToolTabs from '../components/ToolTabs';
 import SignalCard from '../components/SignalCard';
 import { MEASUREMENT_BY_ID, formatMeasurement, measure } from '../cv/measurements';
 import { createRecorder } from '../cv/recording';
@@ -104,7 +105,7 @@ function ReviewTable({ spec, calibration }: { spec: SignalSpec; calibration: Sig
     <div className="mt-3 overflow-x-auto">
       <table className="w-full min-w-md border-collapse text-left text-sm">
         <thead>
-          <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:text-slate-400">
+          <tr className="border-b border-line text-xs uppercase tracking-wide text-mute">
             <th className="py-2 pr-4 font-medium">Measurement</th>
             <th className="py-2 pr-4 font-medium">You recorded</th>
             <th className="py-2 pr-4 font-medium">Default band</th>
@@ -113,20 +114,14 @@ function ReviewTable({ spec, calibration }: { spec: SignalSpec; calibration: Sig
         </thead>
         <tbody className="font-mono">
           {rows.map((row) => (
-            <tr key={row.key} className="border-b border-slate-100 dark:border-slate-800/60">
+            <tr key={row.key} className="border-b border-line">
               <th scope="row" className="py-2 pr-4 font-sans font-normal">
                 {row.label}
                 {row.side ? ` (${row.side})` : ''}
               </th>
               <td className="py-2 pr-4">{row.recordedText}</td>
-              <td className="py-2 pr-4 text-slate-500 dark:text-slate-400">
-                {row.defaultBandText}
-              </td>
-              <td
-                className={`py-2 pr-4 ${
-                  row.changed ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500'
-                }`}
-              >
+              <td className="py-2 pr-4 text-mute">{row.defaultBandText}</td>
+              <td className={`py-2 pr-4 ${row.changed ? 'font-bold text-chalk' : 'text-mute'}`}>
                 {row.newBandText}
               </td>
             </tr>
@@ -134,7 +129,7 @@ function ReviewTable({ spec, calibration }: { spec: SignalSpec; calibration: Sig
         </tbody>
       </table>
       {skipped > 0 ? (
-        <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+        <p className="mt-2 text-sm text-mute">
           {skipped} more constraint{skipped === 1 ? '' : 's'} — hand shape or arm symmetry — not
           shown here: neither is a band a recording can widen.
         </p>
@@ -142,12 +137,6 @@ function ReviewTable({ spec, calibration }: { spec: SignalSpec; calibration: Sig
     </div>
   );
 }
-
-const TOGGLE_BASE =
-  'rounded-md border px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500';
-const TOGGLE_ON = 'border-sky-500 bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300';
-const TOGGLE_OFF =
-  'border-slate-300 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800';
 
 export default function CalibrateSignals() {
   const [store, setStore] = useState<CalibrationStore>(() => loadCalibrationStore());
@@ -321,23 +310,17 @@ export default function CalibrateSignals() {
       SIGNAL_SPECS.map((spec) => {
         const calibrated = spec.id in store;
         return (
-          <li key={spec.id} className="space-y-1">
+          <li key={spec.id} className="border-b border-line py-1">
             <SignalCard spec={spec} selected={spec === selectedSpec} onSelect={selectSignal} />
-            <div className="flex items-center justify-between px-1 text-xs">
-              <span
-                className={
-                  calibrated
-                    ? 'text-emerald-600 dark:text-emerald-400'
-                    : 'text-slate-500 dark:text-slate-500'
-                }
-              >
+            <div className="flex items-center justify-between px-4 pb-1 text-xs">
+              <span className={calibrated ? 'text-chalk' : 'text-mute'}>
                 {calibrated ? 'Using your recording' : 'Using default band'}
               </span>
               {calibrated ? (
                 <button
                   type="button"
                   onClick={() => resetSignal(spec.id)}
-                  className="text-slate-500 underline hover:no-underline dark:text-slate-400"
+                  className="text-mute underline hover:no-underline"
                 >
                   Reset to default
                 </button>
@@ -350,23 +333,25 @@ export default function CalibrateSignals() {
   );
 
   return (
-    <>
-      <PageHeader
-        title="Expert calibration"
-        lede="Perform each signal correctly and record it — the reference future practice sessions grade against. Recording overwrites any previous take for that signal; the default band is always one reset away."
-      />
+    <div className="mx-auto max-w-6xl p-5 sm:p-8">
+      <ToolTabs />
+      <div className="mb-6 flex items-center gap-3">
+        <h1 className="display text-5xl">Expert calibration</h1>
+        <Hint align="left">
+          Record yourself making each signal correctly. Drills then grade against your recording
+          instead of the default. A new take replaces the old one; reset brings the default back.
+        </Hint>
+      </div>
 
       <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold">{selectedSpec.label}</h2>
-          <p className="max-w-2xl text-sm text-slate-600 dark:text-slate-400">
-            {selectedSpec.description}
-          </p>
+          <h2 className="display text-4xl">{selectedSpec.label}</h2>
+          <p className="mt-1 max-w-2xl text-sm text-mute">{selectedSpec.description}</p>
         </div>
 
         {!twoArmed ? (
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium">Recording with your:</span>
+            <span className="caption">Arm</span>
             {(['right', 'left'] as const).map((side) => (
               <button
                 key={side}
@@ -374,16 +359,14 @@ export default function CalibrateSignals() {
                 onClick={() => chooseSide(side)}
                 aria-pressed={selectedSide === side}
                 disabled={busy}
-                className={`${TOGGLE_BASE} ${selectedSide === side ? TOGGLE_ON : TOGGLE_OFF}`}
+                className="btn"
               >
                 {side === 'right' ? 'Right arm' : 'Left arm'}
               </button>
             ))}
           </div>
         ) : (
-          <p className="text-sm text-slate-600 dark:text-slate-400">
-            Both arms are recorded directly — no arm to pick.
-          </p>
+          <p className="caption">Both arms</p>
         )}
       </div>
 
@@ -394,19 +377,14 @@ export default function CalibrateSignals() {
         overlay={
           record.phase === 'countdown' ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/40">
-              <p className="text-lg font-medium uppercase tracking-wide text-white/80">
-                Get ready…
-              </p>
-              <p aria-hidden className="text-8xl font-bold leading-none text-white drop-shadow">
+              <p aria-hidden className="display text-9xl">
                 {Math.ceil(record.remainingMs / 1000)}
               </p>
             </div>
           ) : record.phase === 'recording' ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-              <p className="rounded-full bg-rose-600 px-4 py-1.5 text-lg font-semibold text-white shadow-lg">
-                ● Recording
-              </p>
-              <p aria-hidden className="text-6xl font-bold leading-none text-white drop-shadow">
+              <p className="caption bg-chalk px-3 py-1.5 text-ink">Recording</p>
+              <p aria-hidden className="display text-8xl">
                 {((RECORD_MS - record.elapsedMs) / 1000).toFixed(1)}s
               </p>
             </div>
@@ -415,53 +393,31 @@ export default function CalibrateSignals() {
       >
         {busy ? (
           <>
-            <span
-              role="status"
-              className="rounded-md bg-slate-800/80 px-3 py-1.5 text-sm font-medium text-white"
-            >
+            <span role="status" className="caption text-chalk">
               {record.phase === 'countdown'
                 ? `Starts in ${Math.ceil(record.remainingMs / 1000)}…`
                 : `Recording… ${(record.elapsedMs / 1000).toFixed(1)} s`}
             </span>
-            <button
-              type="button"
-              onClick={cancelRecording}
-              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium transition-colors hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 dark:border-slate-700 dark:hover:bg-slate-800"
-            >
+            <button type="button" onClick={cancelRecording} className="btn">
               Cancel
             </button>
           </>
         ) : (
-          <button
-            type="button"
-            onClick={startRecording}
-            className="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-sky-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400"
-          >
+          <button type="button" onClick={startRecording} className="btn btn-go">
             Record {RECORD_MS / 1000} s
           </button>
         )}
       </CameraStage>
 
       {record.phase === 'review' ? (
-        <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-900">
-          <p className="text-sm text-slate-600 dark:text-slate-300">
-            Recorded with your {record.calibration.side} arm. Review the bands this will produce,
-            then save or retake.
-          </p>
+        <div className="mt-3 border border-line bg-panel p-3">
+          <p className="caption">Recorded with your {record.calibration.side} arm</p>
           <ReviewTable spec={selectedSpec} calibration={record.calibration} />
           <div className="mt-3 flex gap-2">
-            <button
-              type="button"
-              onClick={save}
-              className="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-sky-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400"
-            >
+            <button type="button" onClick={save} className="btn btn-go">
               Save
             </button>
-            <button
-              type="button"
-              onClick={retake}
-              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium transition-colors hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 dark:border-slate-700 dark:hover:bg-slate-800"
-            >
+            <button type="button" onClick={retake} className="btn">
               Retake
             </button>
           </div>
@@ -470,22 +426,18 @@ export default function CalibrateSignals() {
 
       <section aria-labelledby="calibration-picker" className="mt-10">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 id="calibration-picker" className="text-lg font-semibold tracking-tight">
+          <h2 id="calibration-picker" className="caption flex items-center gap-2">
             The core ten
+            <Hint align="left">
+              Pick a signal to record it. Export saves every recording on this device to a file;
+              import loads one back in, on top of what is already saved.
+            </Hint>
           </h2>
           <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={exportStore}
-              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium transition-colors hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 dark:border-slate-700 dark:hover:bg-slate-800"
-            >
+            <button type="button" onClick={exportStore} className="btn">
               Export recordings
             </button>
-            <button
-              type="button"
-              onClick={triggerImport}
-              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium transition-colors hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 dark:border-slate-700 dark:hover:bg-slate-800"
-            >
+            <button type="button" onClick={triggerImport} className="btn">
               Import recordings
             </button>
             <input
@@ -497,12 +449,10 @@ export default function CalibrateSignals() {
             />
           </div>
         </div>
-        <p className="mt-1 max-w-2xl text-sm text-slate-600 dark:text-slate-400">
-          Pick a signal to record it. Export saves every recording on this device to a file; import
-          loads one back in, on top of whatever is already saved here.
-        </p>
-        <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{picker}</ul>
+        <ul className="mt-3 grid gap-x-6 border-t border-line sm:grid-cols-2 lg:grid-cols-3">
+          {picker}
+        </ul>
       </section>
-    </>
+    </div>
   );
 }

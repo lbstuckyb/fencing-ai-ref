@@ -169,6 +169,17 @@ async function startCamera() {
   await screen.findByRole('button', { name: /stop camera/i });
 }
 
+/** The ten-signal picker lives in a drawer, closed until asked for. */
+async function openPicker() {
+  await userEvent.click(screen.getByRole('button', { name: /signals/i }));
+}
+
+/** What the drill says about its mode is behind the "?" beside the picker button. */
+async function modeHint(): Promise<HTMLElement> {
+  await userEvent.hover(screen.getByRole('button', { name: 'More info' }));
+  return screen.getByRole('tooltip');
+}
+
 /** The verdict panel, which carries the outcome as a data attribute. */
 function verdict(): HTMLElement | null {
   return document.querySelector('[data-outcome]');
@@ -180,13 +191,13 @@ function streak(): HTMLElement {
 }
 
 describe('PracticeSignals', () => {
-  it('prompts the linked signal and describes it before the camera starts', () => {
+  it('prompts the linked signal before the camera starts', async () => {
     renderDrill('halt');
 
-    // Both the overlay prompt and the feedback panel name it; the picker marks
-    // it as the one being drilled.
-    expect(screen.getAllByText('Halt').length).toBeGreaterThan(0);
-    expect(screen.getByText(/start the camera to be graded/i)).toBeInTheDocument();
+    // The idle screen names it, and the picker marks it as the one being drilled.
+    expect(screen.getByText('Halt')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /start camera/i })).toBeInTheDocument();
+    await openPicker();
     expect(screen.getByRole('button', { name: /^Halt/ })).toHaveAttribute('aria-pressed', 'true');
   });
 
@@ -198,7 +209,7 @@ describe('PracticeSignals', () => {
 
     await clock.hold(HALT_RIGHT, 1400);
     // The duration requirement is met while the arm is still up.
-    expect(screen.getByText(/held long enough/i)).toBeInTheDocument();
+    expect(screen.getByText('Held')).toBeInTheDocument();
 
     await clock.hold(REST, 400);
 
@@ -240,12 +251,12 @@ describe('PracticeSignals', () => {
 
     // Attack names a fencer, so the drill asks for a side; whichever it drew,
     // the other arm is the mistake this test is about.
-    const asked = screen.getByText(/with your (left|right) arm/i).textContent!;
+    const asked = screen.getByText(/^(left|right) arm$/i).textContent!;
     const wanted = /right/i.test(asked) ? 'right' : 'left';
     const wrong = wanted === 'right' ? ATTACK_LEFT : ATTACK_RIGHT;
 
     await clock.hold(wrong, 1400);
-    expect(screen.getByText(/that is the right signal, but on your/i)).toBeInTheDocument();
+    expect(screen.getByText(/wrong arm — use your/i)).toBeInTheDocument();
 
     await clock.hold(REST, 400);
 
@@ -260,14 +271,17 @@ describe('PracticeSignals', () => {
   it('switches signals from the picker and pins the choice to the URL', async () => {
     renderDrill('halt');
 
+    await openPicker();
     await userEvent.click(screen.getByRole('button', { name: /^Double hit/ }));
 
+    // Choosing closes the drawer; reopen it to see what it marks.
+    await openPicker();
     expect(screen.getByRole('button', { name: /^Double hit/ })).toHaveAttribute(
       'aria-pressed',
       'true'
     );
     expect(screen.getByRole('button', { name: /^Halt/ })).toHaveAttribute('aria-pressed', 'false');
-    expect(screen.getByText(/drilling Double hit/i)).toBeInTheDocument();
+    expect(await modeHint()).toHaveTextContent(/staying on Double hit/i);
   });
 
   it('returns to random prompts on “next signal”', async () => {
@@ -278,7 +292,7 @@ describe('PracticeSignals', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /next signal/i }));
 
-    expect(screen.getByText(/signals come up at random/i)).toBeInTheDocument();
+    expect(await modeHint()).toHaveTextContent(/random order/i);
   });
 
   it('drops a hold in progress when the camera stops, keeping the score', async () => {
@@ -297,7 +311,7 @@ describe('PracticeSignals', () => {
 
     // Still one: switching the camera off is not a way to score a signal.
     expect(streak()).toHaveTextContent('1');
-    expect(screen.getByText(/start the camera to be graded/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /start camera/i })).toBeInTheDocument();
   });
 
   it('loads the hand model only for the signals that read fingers', async () => {
@@ -310,6 +324,7 @@ describe('PracticeSignals', () => {
     // per-frame cost.
     expect(getHandDetector).not.toHaveBeenCalled();
 
+    await openPicker();
     await userEvent.click(screen.getByRole('button', { name: /^Halt/ }));
     await waitFor(() => expect(getHandDetector).toHaveBeenCalled());
   });

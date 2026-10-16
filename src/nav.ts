@@ -1,45 +1,28 @@
 /**
- * Single source of truth for the five routes — consumed by both the router in
- * App.tsx and the header nav, so a route can never exist without a way to reach
- * it (or vice versa).
+ * The path through the app, and the tools beside it. Consumed by the router's
+ * tests and the top bar, so a step can never exist without a way to reach it.
  */
 
-export interface NavItem {
+export interface Step {
   path: string;
   label: string;
-  /** One-line description, used on the Home mode cards in stage 3. */
-  blurb: string;
+  /** Shown beside the label: the order the steps are meant to be taken in. */
+  number: string;
 }
 
-export const NAV_ITEMS: readonly NavItem[] = [
-  {
-    path: '/',
-    label: 'Home',
-    blurb: 'What this is, and the FIE rules it grades against.',
-  },
-  {
-    path: '/reference',
-    label: 'Reference',
-    blurb: 'The t.63 signal library — every official signal, described.',
-  },
-  {
-    path: '/practice',
-    label: 'Practice',
-    blurb: 'Drill a single signal; graded live on shape and hold duration.',
-  },
-  {
-    path: '/scenarios',
-    label: 'Scenarios',
-    blurb: 'Referee a clip live: call the phrase as it happens and get graded per weapon.',
-  },
-  {
-    path: '/calibrate',
-    label: 'Calibrate',
-    blurb: 'Live joint readouts — the numbers the signal specs are tuned against.',
-  },
-  {
-    path: '/calibrate-signals',
-    label: 'Expert calibration',
-    blurb: 'Record yourself making each signal correctly, and grade against that instead.',
-  },
+export const STEPS: readonly Step[] = [
+  { path: '/reference', label: 'Learn', number: '01' },
+  { path: '/practice', label: 'Practice', number: '02' },
+  { path: '/scenarios', label: 'Referee', number: '03' },
+] as const;
+
+export interface Tool {
+  path: string;
+  label: string;
+}
+
+/** Tuning pages: reachable from the gear, not part of the path. */
+export const TOOLS: readonly Tool[] = [
+  { path: '/calibrate-signals', label: 'Your signals' },
+  { path: '/calibrate', label: 'Readouts' },
 ] as const;

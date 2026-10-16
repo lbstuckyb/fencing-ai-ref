@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import CameraStage from '../components/CameraStage';
-import PageHeader from '../components/PageHeader';
+import Hint from '../components/Hint';
+import ToolTabs from '../components/ToolTabs';
 import {
   MEASUREMENT_GROUPS,
   emptyMeasurements,
@@ -69,9 +70,7 @@ function ValueCell({ value, summary, row }: ValueCellProps) {
     <td className="py-2 pr-4 align-top tabular-nums">
       <div>{formatMeasurement(value, row.unit)}</div>
       {summary !== undefined ? (
-        <div className="text-sm text-slate-500 dark:text-slate-400">
-          {formatSummary(summary, row)}
-        </div>
+        <div className="text-sm text-mute">{formatSummary(summary, row)}</div>
       ) : null}
     </td>
   );
@@ -86,15 +85,15 @@ interface GroupTableProps {
 function GroupTable({ group, measurements, recording }: GroupTableProps) {
   return (
     <section className="mt-8">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+      <h2 className="caption flex items-center gap-2">
         {group.label}
+        <Hint align="left">{group.note}</Hint>
       </h2>
-      <p className="mt-1 max-w-2xl text-sm text-slate-600 dark:text-slate-400">{group.note}</p>
 
       <div className="mt-3 overflow-x-auto">
         <table className="w-full min-w-md border-collapse text-left text-base">
           <thead>
-            <tr className="border-b border-slate-200 text-sm uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:text-slate-400">
+            <tr className="border-b border-line text-sm uppercase tracking-wide text-mute">
               <th className="py-2 pr-4 font-medium">Measurement</th>
               {COLUMNS.map((side) => (
                 <th key={side} className="py-2 pr-4 font-medium">
@@ -107,14 +106,10 @@ function GroupTable({ group, measurements, recording }: GroupTableProps) {
             {group.rows.map((row) => {
               const ids = idsOf(row);
               return (
-                <tr key={ids[0]} className="border-b border-slate-100 dark:border-slate-800/60">
+                <tr key={ids[0]} className="border-b border-line">
                   <th scope="row" className="py-2 pr-4 font-sans font-normal align-top">
                     <span className="font-medium">{row.label}</span>
-                    {row.hint ? (
-                      <span className="block text-sm text-slate-500 dark:text-slate-400">
-                        {row.hint}
-                      </span>
-                    ) : null}
+                    {row.hint ? <span className="block text-sm text-mute">{row.hint}</span> : null}
                   </th>
                   {row.kind === 'sided' ? (
                     COLUMNS.map((side) => {
@@ -134,7 +129,7 @@ function GroupTable({ group, measurements, recording }: GroupTableProps) {
                     <td className="py-2 pr-4 align-top tabular-nums" colSpan={COLUMNS.length}>
                       <div>{formatMeasurement(measurements.values[row.id], row.unit)}</div>
                       {recording ? (
-                        <div className="text-sm text-slate-500 dark:text-slate-400">
+                        <div className="text-sm text-mute">
                           {formatSummary(recording.stats[row.id], row)}
                         </div>
                       ) : null}
@@ -148,7 +143,7 @@ function GroupTable({ group, measurements, recording }: GroupTableProps) {
       </div>
 
       {group.id === 'hand' ? (
-        <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+        <p className="mt-2 text-sm text-mute">
           {`Classified shape — ${COLUMNS.map(
             (side) => `your ${side}: ${formatShape(measurements.shapes[side])}`
           ).join(' · ')}`}
@@ -221,19 +216,20 @@ export default function Calibrate() {
   const recording = record.phase === 'done' ? record.recording : null;
 
   return (
-    <>
-      <PageHeader
-        title="Calibrate"
-        lede="Live readouts of every quantity the signal specs reference. Perform a signal correctly, record the hold, and write the measured numbers into the spec — the thresholds in the plan were read off illustrations and are only estimates until they have been through this page."
-      />
+    <div className="mx-auto max-w-6xl p-5 sm:p-8">
+      <ToolTabs />
+      <div className="mb-4 flex items-center gap-3">
+        <h1 className="display text-5xl">Calibrate</h1>
+        <Hint align="left">
+          Live readouts of every quantity the signal specs use. Perform a signal, record the hold,
+          and write the measured numbers into the spec.
+        </Hint>
+      </div>
 
       <CameraStage onFrame={onFrame} onRunningChange={onRunningChange} needsHands>
         {record.phase === 'recording' ? (
           <>
-            <span
-              role="status"
-              className="rounded-md bg-rose-600 px-3 py-1.5 text-sm font-medium text-white"
-            >
+            <span role="status" className="caption bg-chalk px-3 py-2 text-ink">
               Recording… {(record.elapsedMs / 1000).toFixed(1)} s
             </span>
             {/*
@@ -241,51 +237,29 @@ export default function Calibrate() {
               recording started with nobody in shot would otherwise sit here
               forever with no way out but stopping the camera.
             */}
-            <button
-              type="button"
-              onClick={clearRecording}
-              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium transition-colors hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 dark:border-slate-700 dark:hover:bg-slate-800"
-            >
+            <button type="button" onClick={clearRecording} className="btn">
               Cancel
             </button>
           </>
         ) : (
-          <button
-            type="button"
-            onClick={startRecording}
-            className="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-sky-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400"
-          >
+          <button type="button" onClick={startRecording} className="btn btn-go">
             Record {RECORD_MS / 1000} s
           </button>
         )}
         {recording ? (
-          <button
-            type="button"
-            onClick={clearRecording}
-            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium transition-colors hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 dark:border-slate-700 dark:hover:bg-slate-800"
-          >
+          <button type="button" onClick={clearRecording} className="btn">
             Clear recording
           </button>
         ) : null}
       </CameraStage>
 
-      <p className="mt-3 max-w-2xl text-sm text-slate-600 dark:text-slate-400">
-        The view is mirrored, as a referee practising in front of a screen expects. Sides are read
-        from anatomy rather than screen position, so a signal made with your right arm is graded as
-        a right-arm signal wherever it appears in the frame. Check that now: raise your right arm,
-        and the limb the overlay draws in cyan — and the &ldquo;your right&rdquo; column below — are
-        the ones that should move.
-      </p>
-
       {recording ? (
-        <p
-          role="status"
-          className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
-        >
-          Recorded {recording.frames} frames over {(recording.durationMs / 1000).toFixed(1)} s. The
-          smaller line in each cell is <strong>min · median · max</strong> across that hold. Take
-          the median as the centre of a band and the spread as the tolerance it needs — a number
-          that wandered ten degrees while you held still needs a band wider than ten degrees.
+        <p role="status" className="caption mt-3 flex items-center gap-2 text-chalk">
+          Recorded {recording.frames} frames over {(recording.durationMs / 1000).toFixed(1)} s
+          <Hint align="left">
+            The smaller line in each cell is min · median · max across the hold. Take the median as
+            the centre of a band and the spread as the tolerance it needs.
+          </Hint>
         </p>
       ) : null}
 
@@ -297,6 +271,6 @@ export default function Calibrate() {
           recording={recording}
         />
       ))}
-    </>
+    </div>
   );
 }

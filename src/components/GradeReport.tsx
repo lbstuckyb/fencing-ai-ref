@@ -12,52 +12,29 @@ import type { Scenario } from '../scenario/schema';
  * mistakes named.
  */
 
-const STATUS_STYLE: Record<StepStatus, { mark: string; className: string }> = {
-  correct: {
-    mark: '✓',
-    className:
-      'border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200',
-  },
-  out_of_order: {
-    mark: '⚠',
-    className:
-      'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200',
-  },
-  wrong_side: {
-    mark: '⚠',
-    className:
-      'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200',
-  },
-  wrong_signal: {
-    mark: '✗',
-    className:
-      'border-rose-300 bg-rose-50 text-rose-900 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200',
-  },
-  missing: {
-    mark: '✗',
-    className:
-      'border-rose-300 bg-rose-50 text-rose-900 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200',
-  },
+const STATUS_LABEL: Record<StepStatus, string> = {
+  correct: 'Correct',
+  out_of_order: 'Out of order',
+  wrong_side: 'Wrong arm',
+  wrong_signal: 'Wrong signal',
+  missing: 'Missing',
 };
 
-const EXTRA_CLASS =
-  'border-rose-300 bg-rose-50 text-rose-900 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200';
+const ROW = 'flex items-baseline gap-4 border-b border-line py-3';
+const TAG = 'caption w-28 shrink-0';
 
 interface StepRowProps {
   verdict: StepVerdict;
 }
 
 function StepRow({ verdict }: StepRowProps) {
-  const style = STATUS_STYLE[verdict.status];
+  const correct = verdict.status === 'correct';
   return (
-    <li
-      data-status={verdict.status}
-      className={`rounded-lg border p-3 text-base ${style.className}`}
-    >
-      <span aria-hidden className="mr-2 text-lg">
-        {style.mark}
+    <li data-status={verdict.status} className={ROW}>
+      <span className={`${TAG} ${correct ? 'text-chalk' : ''}`}>
+        {STATUS_LABEL[verdict.status]}
       </span>
-      {verdict.message}
+      <span className={correct ? 'text-lg' : 'text-lg text-chalk/70'}>{verdict.message}</span>
     </li>
   );
 }
@@ -68,22 +45,18 @@ interface SpokenRowProps {
 
 function SpokenRow({ say }: SpokenRowProps) {
   return (
-    <li className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-base text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
-      <span aria-hidden className="mr-2 text-lg">
-        💬
-      </span>
-      Spoken, not graded — “{say[0]}”
+    <li className={ROW}>
+      <span className={TAG}>Spoken</span>
+      <span className="text-lg text-mute">“{say[0]}”</span>
     </li>
   );
 }
 
 function ExtraRow({ verdict }: { verdict: ExtraVerdict }) {
   return (
-    <li className={`rounded-lg border p-3 text-base ${EXTRA_CLASS}`}>
-      <span aria-hidden className="mr-2 text-lg">
-        +
-      </span>
-      {verdict.message}
+    <li className={ROW}>
+      <span className={TAG}>Extra</span>
+      <span className="text-lg text-chalk/70">{verdict.message}</span>
     </li>
   );
 }
@@ -93,9 +66,17 @@ interface GradeReportProps {
   grade: ScenarioGrade;
   onRetry: () => void;
   onChoose: () => void;
+  /** Moves straight on to another phrase; omitted when there is none left. */
+  onNext?: () => void;
 }
 
-export default function GradeReport({ scenario, grade, onRetry, onChoose }: GradeReportProps) {
+export default function GradeReport({
+  scenario,
+  grade,
+  onRetry,
+  onChoose,
+  onNext,
+}: GradeReportProps) {
   const percent = Math.round(grade.score * 100);
 
   // The full authored sequence, spoken-only steps and all — matched back up
@@ -116,59 +97,46 @@ export default function GradeReport({ scenario, grade, onRetry, onChoose }: Grad
   });
 
   return (
-    <div className="space-y-6">
-      <div role="status" className="rounded-lg border border-slate-200 p-4 dark:border-slate-800">
-        <div className="flex items-baseline justify-between">
-          <h2 className="text-lg font-semibold tracking-tight">
-            {grade.correct}/{grade.total} correct
-          </h2>
-          <span className="text-2xl font-semibold tabular-nums">{percent}%</span>
-        </div>
-        <div className="mt-2 h-3 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-          <div
-            className="h-full rounded-full bg-sky-500 transition-[width] duration-300 ease-out"
-            style={{ width: `${percent}%` }}
-          />
-        </div>
+    <div className="mx-auto flex min-h-full max-w-5xl flex-col gap-8 p-5 sm:p-10 lg:flex-row lg:gap-14">
+      <div role="status" className="shrink-0 animate-rise">
+        <p className="display text-[clamp(6rem,20vw,15rem)] tabular-nums">{percent}%</p>
+        <h2 className="caption mt-2 text-lg text-chalk">
+          {grade.correct}/{grade.total} correct
+        </h2>
       </div>
 
-      <ol className="space-y-2">{rows}</ol>
+      <div className="flex min-w-0 flex-1 flex-col gap-6">
+        <ol className="border-t border-line">{rows}</ol>
 
-      {grade.extra.length > 0 ? (
+        {grade.extra.length > 0 ? (
+          <div>
+            <h3 className="caption">Extra calls</h3>
+            <ul className="mt-2 border-t border-line">
+              {grade.extra.map((verdict, index) => (
+                <ExtraRow key={index} verdict={verdict} />
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
         <div>
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            Extra calls
-          </h3>
-          <ul className="mt-2 space-y-2">
-            {grade.extra.map((verdict, index) => (
-              <ExtraRow key={index} verdict={verdict} />
-            ))}
-          </ul>
+          <h3 className="caption">What happened</h3>
+          <p className="mt-1 text-lg">{scenario.explanation}</p>
         </div>
-      ) : null}
 
-      <div className="rounded-lg border border-sky-300 bg-sky-50 p-4 text-base text-sky-900 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-200">
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-400">
-          What happened
-        </h3>
-        <p className="mt-1">{scenario.explanation}</p>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={onRetry}
-          className="rounded-md bg-sky-600 px-4 py-2 text-base font-medium text-white transition-colors hover:bg-sky-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400"
-        >
-          Try again
-        </button>
-        <button
-          type="button"
-          onClick={onChoose}
-          className="rounded-md border border-slate-300 px-4 py-2 text-base font-medium transition-colors hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 dark:border-slate-700 dark:hover:bg-slate-800"
-        >
-          Choose another scenario
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={onRetry} className="btn">
+            Try again
+          </button>
+          <button type="button" onClick={onChoose} className="btn">
+            All phrases
+          </button>
+          {onNext ? (
+            <button type="button" onClick={onNext} className="btn btn-go ml-auto">
+              Next phrase ›
+            </button>
+          ) : null}
+        </div>
       </div>
     </div>
   );

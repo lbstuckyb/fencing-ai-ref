@@ -175,11 +175,11 @@ export interface SkeletonColors {
   center: string;
 }
 
-/** Warm for left, cool for right, neutral for the spine and face. */
+/** The scoring-box lamps: red for left, green for right, chalk for the spine and face. */
 export const SKELETON_COLORS: SkeletonColors = {
-  left: '#fbbf24',
-  right: '#38bdf8',
-  center: '#e2e8f0',
+  left: '#ff3b30',
+  right: '#22e07a',
+  center: '#f2f0ea',
 };
 
 /**

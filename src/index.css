@@ -1,17 +1,53 @@
 @import 'tailwindcss';
+@import '@fontsource-variable/big-shoulders-display';
+@import '@fontsource-variable/hanken-grotesk';
 
 /*
- * Class-based dark mode. Tailwind v4 defaults `dark:` to `prefers-color-scheme`,
- * but the app offers an explicit light/dark/system toggle (see src/theme.ts), so
- * the variant has to key off a class on <html> instead.
+ * The scoring box. Two neutrals and the two lamps, and the lamps mean one thing
+ * only: red is the fencer on the left, green the fencer on the right. Pass and
+ * fail are said in words, never in colour, so a red arm line is never mistaken
+ * for a wrong one.
  */
-@custom-variant dark (&:where(.dark, .dark *));
+@theme {
+  --color-ink: #0b0b0c;
+  --color-panel: #151517;
+  --color-line: #2c2c31;
+  --color-chalk: #f2f0ea;
+  --color-mute: #8d8d95;
+  --color-lamp-red: #ff3b30;
+  --color-lamp-green: #22e07a;
 
-:root {
-  color-scheme: light;
+  --font-display: 'Big Shoulders Display Variable', 'Arial Narrow', sans-serif;
+  --font-sans: 'Hanken Grotesk Variable', system-ui, sans-serif;
+
+  --animate-lamp: lamp 900ms ease-out both;
+  --animate-rise: rise 400ms ease-out both;
+
+  @keyframes lamp {
+    0% {
+      opacity: 0;
+    }
+    12% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(0.5rem);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
 }
 
-.dark {
+:root {
   color-scheme: dark;
 }
 
@@ -19,6 +55,87 @@ html,
 body,
 #root {
   height: 100%;
+}
+
+body {
+  background: var(--color-ink);
+  color: var(--color-chalk);
+  font-family: var(--font-sans);
+}
+
+@layer components {
+  /* Headings and numerals: condensed, uppercase, tight. */
+  .display {
+    font-family: var(--font-display);
+    font-weight: 800;
+    text-transform: uppercase;
+    line-height: 0.9;
+    letter-spacing: 0.01em;
+  }
+
+  /* The small caption under a numeral or beside a control. */
+  .caption {
+    font-family: var(--font-display);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-size: 0.8rem;
+    color: var(--color-mute);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.55rem 1.1rem;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.05rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    line-height: 1;
+    color: var(--color-chalk);
+    border: 1px solid var(--color-line);
+    background: rgb(11 11 12 / 0.7);
+    transition:
+      background-color 120ms,
+      border-color 120ms,
+      color 120ms;
+  }
+  .btn:hover:not(:disabled) {
+    border-color: var(--color-chalk);
+  }
+  .btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .btn:focus-visible,
+  .focusable:focus-visible {
+    outline: 2px solid var(--color-chalk);
+    outline-offset: 2px;
+  }
+  .btn[aria-pressed='true'] {
+    background: var(--color-chalk);
+    border-color: var(--color-chalk);
+    color: var(--color-ink);
+  }
+
+  /* The one next step on a screen. */
+  .btn-go {
+    background: var(--color-chalk);
+    border-color: var(--color-chalk);
+    color: var(--color-ink);
+  }
+  .btn-go:hover:not(:disabled) {
+    background: #fff;
+  }
+
+  /* A floating readout over video. */
+  .hud {
+    background: rgb(11 11 12 / 0.72);
+    backdrop-filter: blur(6px);
+  }
 }
 
 /* Respect users who ask for reduced motion — the drills are motion-heavy. */

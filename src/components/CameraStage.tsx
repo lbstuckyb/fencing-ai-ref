@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import Hint from './Hint';
 import { getHandDetector, getPoseDetector, LandmarkerError } from '../cv/landmarker';
 import type { HandDetector } from '../cv/landmarker';
 import { createFrameLimiter } from '../cv/loop';
@@ -166,7 +167,15 @@ export interface CameraStageProps {
    * are the two things a self-view exists to tell you.
    */
   compact?: boolean;
-  /** Extra controls shown alongside the stop button while running. */
+  /**
+   * Fill the parent instead of holding a 16:9 box — the stage *is* the page.
+   * The control row then sits under the video for as long as the page is open,
+   * not only while the camera runs, so the way onward is never hidden.
+   */
+  fill?: boolean;
+  /** Shown above the start button before the camera has been started. */
+  idleContent?: ReactNode;
+  /** Extra controls shown alongside the stop button. */
   children?: ReactNode;
 }
 
@@ -178,6 +187,8 @@ export default function CameraStage({
   showSkeleton = true,
   autoStart = false,
   compact = false,
+  fill = false,
+  idleContent,
   children,
 }: CameraStageProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -472,10 +483,16 @@ export default function CameraStage({
   }, [releaseStream]);
 
   const running = phase === 'running';
+  /** Only the part a self-view needs: whether you are in shot. */
+  const terse = compact || fill;
 
   return (
-    <div className="space-y-3">
-      <div className="relative aspect-video w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-900 dark:border-slate-800">
+    <div className={fill ? 'flex h-full flex-col' : 'space-y-3'}>
+      <div
+        className={`relative w-full overflow-hidden bg-black ${
+          fill ? 'min-h-0 flex-1' : 'aspect-video border border-line'
+        }`}
+      >
         <video
           ref={videoRef}
           playsInline
@@ -499,87 +516,79 @@ export default function CameraStage({
               />
             ) : null}
             <div className="pointer-events-none absolute inset-0">{overlay}</div>
-            {compact ? (
-              // Only the part a self-view needs: whether you are in shot.
-              stats.detections === 0 ? (
-                <p className="absolute left-2 top-2 rounded bg-black/60 px-2 py-0.5 font-mono text-[0.65rem] text-white">
-                  no pose in frame
-                </p>
-              ) : null
-            ) : (
-              <p className="absolute left-2 top-2 rounded bg-black/60 px-2 py-1 font-mono text-xs text-white">
-                {stats.fps} fps ·{' '}
-                {stats.detections > 0
-                  ? `${stats.landmarks} landmarks @ ${stats.detections}/s`
-                  : 'no pose in frame'}
-                {needsHands ? ` · ${stats.hands} hand${stats.hands === 1 ? '' : 's'}` : ''}
-              </p>
-            )}
 
-            {handsUnavailable ? (
-              <p
-                role="status"
-                className="absolute right-2 top-2 max-w-56 rounded bg-amber-900/80 px-2 py-1 text-xs text-amber-50"
-              >
-                Hand detail is unavailable — the hand model did not load. Arm geometry still grades;
-                run <code>npm run fetch-assets</code>.
-              </p>
-            ) : null}
-            {showSkeleton ? (
-              // The mirror check, in the corner where it is cheap to glance at:
-              // raise your right arm and the cyan limb must be the one that
-              // moves. Sides are anatomical everywhere in this app, and a
-              // silently inverted one would wreck every directional signal.
-              <p
-                className={`absolute bottom-2 left-2 flex items-center rounded bg-black/60 px-2 py-1 text-white ${
-                  compact ? 'gap-2 text-xs' : 'gap-3 text-sm'
-                }`}
-              >
-                <span className="flex items-center gap-1.5">
-                  <span
-                    aria-hidden
-                    className="h-2 w-2 rounded-full"
-                    style={{ backgroundColor: SKELETON_COLORS.right }}
-                  />
-                  your right
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span
-                    aria-hidden
-                    className="h-2 w-2 rounded-full"
-                    style={{ backgroundColor: SKELETON_COLORS.left }}
-                  />
-                  your left
-                </span>
-              </p>
-            ) : null}
+            <div className="absolute left-2 top-2 flex flex-col items-start gap-1.5">
+              {showSkeleton ? (
+                // The mirror check, in the corner where it is cheap to glance at:
+                // raise your right arm and the green limb must be the one that
+                // moves. Sides are anatomical everywhere in this app, and a
+                // silently inverted one would wreck every directional signal.
+                <p className="hud caption flex items-center gap-3 px-2 py-1 text-chalk">
+                  <span className="flex items-center gap-1.5">
+                    <span
+                      aria-hidden
+                      className="h-2 w-2"
+                      style={{ backgroundColor: SKELETON_COLORS.left }}
+                    />
+                    your left
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span
+                      aria-hidden
+                      className="h-2 w-2"
+                      style={{ backgroundColor: SKELETON_COLORS.right }}
+                    />
+                    your right
+                  </span>
+                </p>
+              ) : null}
+              {terse ? (
+                stats.detections === 0 ? (
+                  <p className="hud caption px-2 py-1 text-chalk">no pose in frame</p>
+                ) : null
+              ) : (
+                <p className="hud px-2 py-1 font-mono text-xs text-chalk">
+                  {stats.fps} fps ·{' '}
+                  {stats.detections > 0
+                    ? `${stats.landmarks} landmarks @ ${stats.detections}/s`
+                    : 'no pose in frame'}
+                  {needsHands ? ` · ${stats.hands} hand${stats.hands === 1 ? '' : 's'}` : ''}
+                </p>
+              )}
+              {handsUnavailable ? (
+                <p role="status" className="hud flex items-center gap-2 px-2 py-1 text-xs">
+                  Hand detail is unavailable
+                  <Hint align="left">
+                    The hand model did not load. Arm geometry still grades. Run{' '}
+                    <code>npm run fetch-assets</code>.
+                  </Hint>
+                </p>
+              ) : null}
+            </div>
           </>
         ) : null}
 
         {phase === 'idle' ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center">
-            <p className="max-w-md text-base text-slate-300">
-              The camera stays off until you start it, and every frame is processed in this tab.
-              Nothing is uploaded or recorded.
-            </p>
-            <button
-              type="button"
-              onClick={start}
-              className="rounded-md bg-sky-600 px-4 py-2 text-base font-medium text-white transition-colors hover:bg-sky-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400"
-            >
-              Start camera
-            </button>
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 p-6 text-center">
+            {idleContent}
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={start}
+                className={`btn btn-go ${compact ? '' : 'px-6 py-3 text-xl'}`}
+              >
+                Start camera
+              </button>
+              <Hint label="About the camera" placement="above">
+                Every frame is processed in this tab. Nothing is uploaded or recorded.
+              </Hint>
+            </div>
           </div>
         ) : null}
 
         {phase === 'starting' ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-6 text-center">
-            <p className={`text-slate-300 ${compact ? 'text-sm' : 'text-base'}`}>
-              Starting camera and loading the pose model…
-            </p>
-            <p className={`text-slate-400 ${compact ? 'text-xs' : 'text-sm'}`}>
-              The model is about 6 MB and is only loaded once per session.
-            </p>
+          <div className="absolute inset-0 flex items-center justify-center p-6">
+            <p className="caption animate-pulse">Starting camera…</p>
           </div>
         ) : null}
 
@@ -588,14 +597,10 @@ export default function CameraStage({
             role="alert"
             className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center"
           >
-            <p className="font-medium text-white">{failure.title}</p>
-            <p className="max-w-md text-base text-slate-300">{failure.detail}</p>
+            <p className={`display ${compact ? 'text-xl' : 'text-3xl'}`}>{failure.title}</p>
+            <p className="max-w-md text-sm text-mute">{failure.detail}</p>
             {failure.retryable ? (
-              <button
-                type="button"
-                onClick={start}
-                className="rounded-md bg-sky-600 px-4 py-2 text-base font-medium text-white transition-colors hover:bg-sky-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400"
-              >
+              <button type="button" onClick={start} className="btn btn-go">
                 Try again
               </button>
             ) : null}
@@ -603,16 +608,18 @@ export default function CameraStage({
         ) : null}
       </div>
 
-      {running ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={stop}
-            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium transition-colors hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 dark:border-slate-700 dark:hover:bg-slate-800"
-          >
-            Stop camera
-          </button>
-          {children}
+      {running || (fill && children) ? (
+        <div
+          className={`flex flex-wrap items-center gap-2 ${
+            fill ? 'shrink-0 border-t border-line px-3 py-2' : ''
+          }`}
+        >
+          {running ? (
+            <button type="button" onClick={stop} className="btn">
+              Stop camera
+            </button>
+          ) : null}
+          {running || fill ? children : null}
         </div>
       ) : null}
     </div>

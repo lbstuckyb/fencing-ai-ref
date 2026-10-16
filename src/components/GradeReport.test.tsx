@@ -81,7 +81,7 @@ describe('GradeReport', () => {
     expect(screen.getByText('100%')).toBeInTheDocument();
 
     // The spoken-only middle step is shown, but carries no verdict.
-    expect(screen.getByText(/Spoken, not graded — .riposte./)).toBeInTheDocument();
+    expect(screen.getByText('“riposte”')).toBeInTheDocument();
 
     expect(screen.getByText('Attack with your right arm — correct.')).toBeInTheDocument();
     expect(screen.getByText('Hit scored with your left arm — correct.')).toBeInTheDocument();
@@ -148,7 +148,7 @@ describe('GradeReport', () => {
     );
 
     await userEvent.click(screen.getByRole('button', { name: /try again/i }));
-    await userEvent.click(screen.getByRole('button', { name: /choose another scenario/i }));
+    await userEvent.click(screen.getByRole('button', { name: /all phrases/i }));
 
     expect(onRetry).toHaveBeenCalledTimes(1);
     expect(onChoose).toHaveBeenCalledTimes(1);

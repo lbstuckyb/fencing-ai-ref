@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 import App from './App';
-import { NAV_ITEMS } from './nav';
+import { STEPS, TOOLS } from './nav';
 
 function renderAt(path: string) {
   return render(
@@ -15,15 +15,16 @@ function renderAt(path: string) {
 
 /** Route path → the <h1> that route is expected to render. */
 const HEADINGS: Record<string, RegExp> = {
-  '/': /fencing referee trainer/i,
-  '/reference': /signal reference/i,
-  '/practice': /signal practice/i,
-  '/scenarios': /^scenarios$/i,
+  '/': /make\s*the call/i,
+  '/reference': /^learn$/i,
+  '/practice': /^drill$/i,
+  '/scenarios': /^referee$/i,
   '/calibrate': /^calibrate$/i,
+  '/calibrate-signals': /^expert calibration$/i,
 };
 
 describe('routing', () => {
-  it.each(NAV_ITEMS.map((item) => [item.path, item.label]))('renders %s directly', async (path) => {
+  it.each(Object.keys(HEADINGS))('renders %s directly', async (path) => {
     renderAt(path);
     expect(await screen.findByRole('heading', { level: 1, name: HEADINGS[path] })).toBeVisible();
   });
@@ -35,42 +36,59 @@ describe('routing', () => {
 });
 
 describe('navigation', () => {
-  it('links to every route from the header nav', () => {
+  it('offers the three steps, in order, and nothing else in the main nav', () => {
     renderAt('/');
-    const nav = screen.getByRole('navigation', { name: /main/i });
-    for (const item of NAV_ITEMS) {
-      expect(screen.getByRole('link', { name: item.label })).toBeInTheDocument();
-    }
-    expect(nav).toBeInTheDocument();
+    const links = screen
+      .getByRole('navigation', { name: /main/i })
+      .querySelectorAll<HTMLAnchorElement>('a');
+    expect([...links].map((link) => link.getAttribute('href'))).toEqual(
+      STEPS.map((step) => step.path)
+    );
   });
 
-  it('moves between pages when a nav link is clicked', async () => {
+  it('walks the path from home: enter, then step to step', async () => {
     const user = userEvent.setup();
     renderAt('/');
 
-    await user.click(screen.getByRole('link', { name: 'Calibrate' }));
-    expect(await screen.findByRole('heading', { level: 1, name: /^calibrate$/i })).toBeVisible();
+    await user.click(screen.getByRole('link', { name: /enter/i }));
+    expect(await screen.findByRole('heading', { level: 1, name: /^learn$/i })).toBeVisible();
 
-    await user.click(screen.getByRole('link', { name: 'Practice' }));
+    await user.click(screen.getByRole('link', { name: /drill halt/i }));
+    expect(await screen.findByRole('heading', { level: 1, name: /^drill$/i })).toBeVisible();
+
+    await user.click(screen.getByRole('link', { name: /^referee ›$/i }));
+    expect(await screen.findByRole('heading', { level: 1, name: /^referee$/i })).toBeVisible();
+  });
+
+  it('marks the current step as the active page', async () => {
+    const user = userEvent.setup();
+    renderAt('/');
+
+    await user.click(screen.getByRole('link', { name: 'Referee' }));
+    expect(screen.getByRole('link', { name: 'Referee' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Learn' })).not.toHaveAttribute('aria-current');
+  });
+
+  it('keeps the tuning pages behind the gear, with a way between them', async () => {
+    const user = userEvent.setup();
+    renderAt('/');
+
+    await user.click(screen.getByRole('link', { name: 'Tuning' }));
     expect(
-      await screen.findByRole('heading', { level: 1, name: /signal practice/i })
+      await screen.findByRole('heading', { level: 1, name: /expert calibration/i })
     ).toBeVisible();
-  });
 
-  it('marks the current route as the active page', async () => {
-    const user = userEvent.setup();
-    renderAt('/');
-
-    await user.click(screen.getByRole('link', { name: 'Scenarios' }));
-    expect(screen.getByRole('link', { name: 'Scenarios' })).toHaveAttribute('aria-current', 'page');
-    // The Home link must not stay active on a child route.
-    expect(screen.getByRole('link', { name: 'Home' })).not.toHaveAttribute('aria-current');
+    const tabs = screen.getByRole('navigation', { name: /tuning/i });
+    for (const tool of TOOLS) {
+      expect(tabs.querySelector(`a[href="${tool.path}"]`)).toHaveTextContent(tool.label);
+    }
   });
 });
 
 describe('layout', () => {
-  it('states the on-device processing guarantee in the footer', () => {
+  it('states the on-device processing guarantee behind the about hint', async () => {
     renderAt('/');
-    expect(screen.getByRole('contentinfo')).toHaveTextContent(/no video leaves the browser/i);
+    await userEvent.hover(screen.getByRole('button', { name: 'About' }));
+    expect(screen.getByRole('tooltip')).toHaveTextContent(/no video leaves the browser/i);
   });
 });
