@@ -64,7 +64,7 @@ describe('ScenarioPlayer before the call is armed', () => {
 
     fireEvent.error(video());
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/isn.t available locally/i);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/clip unavailable/i);
     const arm = screen.getByRole('button', { name: /get ready to call/i });
     expect(arm).toBeEnabled();
 
@@ -103,7 +103,7 @@ describe('ScenarioPlayer transport', () => {
     fireEvent.ended(video());
     expect(onEnded).toHaveBeenCalledTimes(1);
     // A hint only: the call is still open, and replaying is expected.
-    expect(screen.getByText(/still being captured/i)).toBeInTheDocument();
+    expect(screen.getByText(/still capturing/i)).toBeInTheDocument();
   });
 
   it('toggles the play/pause label with playback state', () => {
@@ -147,11 +147,11 @@ describe('ScenarioPlayer transport', () => {
     const el = video();
     const toggle = screen.getByRole('button', { name: /slow motion/i });
 
-    expect(toggle).toHaveTextContent('Slow motion: off');
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
     expect(el.playbackRate).toBe(1);
 
     await userEvent.click(toggle);
-    expect(toggle).toHaveTextContent('Slow motion: on');
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
     expect(toggle).toHaveAttribute('aria-pressed', 'true');
     expect(el.playbackRate).toBe(0.35);
 
@@ -164,7 +164,7 @@ describe('ScenarioPlayer transport', () => {
 
     fireEvent.error(video());
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/isn.t available locally/i);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/clip unavailable/i);
     expect(screen.getByRole('button', { name: 'Play' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Replay' })).toBeDisabled();
   });

@@ -1,64 +1,86 @@
-import { NavLink, Outlet } from 'react-router-dom';
-import { NAV_ITEMS } from '../nav';
-import ThemeToggle from './ThemeToggle';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { STEPS, TOOLS } from '../nav';
+import { SIGNAL_ARTICLE } from '../data/rules';
+import Hint from './Hint';
 
-function navLinkClass({ isActive }: { isActive: boolean }) {
-  const base =
-    'rounded-md px-3 py-1.5 text-base font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500';
-  return isActive
-    ? `${base} bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900`
-    : `${base} text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100`;
+function stepClass({ isActive }: { isActive: boolean }) {
+  return `focusable flex items-baseline gap-1.5 border-b-2 px-1 py-1 font-display text-base font-bold uppercase tracking-widest sm:text-lg transition-colors ${
+    isActive ? 'border-chalk text-chalk' : 'border-transparent text-mute hover:text-chalk'
+  }`;
 }
 
+/**
+ * The frame every page sits in: one thin bar and then the whole viewport. Pages
+ * that fill the screen take `h-full`; the ones that are tables scroll inside
+ * `main`, so the bar never leaves.
+ */
 export default function Layout() {
+  const { pathname } = useLocation();
+  const tuning = TOOLS.some((tool) => tool.path === pathname);
+
   return (
-    <div className="flex min-h-full flex-col bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+    <div className="flex h-dvh flex-col bg-ink text-chalk">
       <a
         href="#main"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-sky-600 focus:px-3 focus:py-2 focus:text-sm focus:text-white"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:bg-chalk focus:px-3 focus:py-2 focus:text-sm focus:text-ink"
       >
         Skip to content
       </a>
 
-      <header className="border-b border-slate-200 dark:border-slate-800">
-        <div className="mx-auto flex w-full max-w-[120rem] flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3 sm:px-6 lg:px-8">
-          <NavLink
-            to="/"
-            className="text-lg font-semibold tracking-tight focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500"
+      <header className="flex shrink-0 items-center gap-x-3 border-b border-line px-3 py-2 sm:gap-x-8 sm:px-5">
+        <NavLink
+          to="/"
+          aria-label="Fencing Referee Trainer"
+          className="focusable flex items-center gap-2"
+        >
+          <span aria-hidden className="h-3 w-3 bg-lamp-red" />
+          <span aria-hidden className="h-3 w-3 bg-lamp-green" />
+          <span className="display hidden pl-1 text-xl sm:inline">Referee</span>
+        </NavLink>
+
+        <nav aria-label="Main" className="flex flex-1 items-center gap-3 sm:gap-6">
+          {STEPS.map((step) => (
+            <NavLink key={step.path} to={step.path} className={stepClass}>
+              <span aria-hidden className="hidden text-xs text-mute sm:inline">
+                {step.number}
+              </span>
+              {step.label}
+            </NavLink>
+          ))}
+        </nav>
+
+        <NavLink
+          to={TOOLS[0].path}
+          aria-label="Tuning"
+          className={`focusable flex h-6 w-6 items-center justify-center transition-colors ${
+            tuning ? 'text-chalk' : 'text-mute hover:text-chalk'
+          }`}
+        >
+          <svg
+            aria-hidden
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
           >
-            Fencing Referee Trainer
-          </NavLink>
+            <path d="M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1" />
+            <circle cx="15" cy="7" r="2" />
+            <circle cx="9" cy="12" r="2" />
+            <circle cx="17" cy="17" r="2" />
+          </svg>
+        </NavLink>
 
-          <nav aria-label="Main" className="flex flex-1 flex-wrap items-center gap-1">
-            {NAV_ITEMS.map((item) => (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                end={item.path === '/'}
-                className={navLinkClass}
-              >
-                {item.label}
-              </NavLink>
-            ))}
-          </nav>
-
-          <ThemeToggle />
-        </div>
+        <Hint label="About">
+          Runs on your device. No video leaves the browser. Graded against FIE Technical Rules,
+          Article {SIGNAL_ARTICLE.article}.
+        </Hint>
       </header>
 
-      <main id="main" className="mx-auto w-full max-w-[120rem] flex-1 px-4 py-8 sm:px-6 lg:px-8">
+      <main id="main" className="relative min-h-0 flex-1 overflow-y-auto">
         <Outlet />
       </main>
-
-      <footer className="border-t border-slate-200 px-4 py-5 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400 sm:px-6 lg:px-8">
-        <div className="mx-auto flex w-full max-w-[120rem] flex-wrap items-center justify-between gap-2">
-          <p>
-            Camera processing runs entirely on your device — no video leaves the browser, and there
-            is no backend.
-          </p>
-          <p>Signals per FIE Technical Rules, Article t.63.</p>
-        </div>
-      </footer>
     </div>
   );
 }

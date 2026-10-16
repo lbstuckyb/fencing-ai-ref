@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import type { Ref } from 'react';
+import type { ReactNode, Ref } from 'react';
+import Hint from './Hint';
 
 /**
  * The clip half of Mode 2: a phrase with the controls a referee actually wants
@@ -52,6 +53,10 @@ interface ScenarioPlayerProps {
    * Only a hint for the page: nothing about the call depends on it.
    */
   onEnded?: () => void;
+  /** Absolutely-positioned content layered over the clip. */
+  overlay?: ReactNode;
+  /** Extra controls at the end of the transport row, once armed. */
+  children?: ReactNode;
   ref?: Ref<ScenarioPlayerHandle>;
 }
 
@@ -61,6 +66,8 @@ export default function ScenarioPlayer({
   onArm,
   canArm = true,
   onEnded,
+  overlay,
+  children,
   ref,
 }: ScenarioPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -97,25 +104,20 @@ export default function ScenarioPlayer({
     else video.pause();
   }, []);
 
-  const BUTTON =
-    'rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium transition-colors hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800';
-
   return (
-    <div className="space-y-3">
-      <div className="relative aspect-video w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-900 dark:border-slate-800">
+    <div className="flex h-full flex-col">
+      <div className="relative min-h-0 flex-1 overflow-hidden bg-black">
         {missing ? (
           <div
             role="alert"
-            className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-6 text-center"
+            className="absolute inset-0 flex items-center justify-center gap-3 p-6 text-center"
           >
-            <p className="font-medium text-white">This clip isn’t available locally</p>
-            <p className="max-w-md text-sm text-slate-300">
-              Placeholder scenario clips are generated, not committed. Run{' '}
-              <code className="rounded bg-white/10 px-1 py-0.5">npm run make-scenarios</code> (needs
-              ffmpeg on <code className="rounded bg-white/10 px-1 py-0.5">PATH</code>), or drop a
-              real clip at <code className="rounded bg-white/10 px-1 py-0.5">public{src}</code>. You
-              can still make and grade the call.
-            </p>
+            <p className="display text-3xl text-mute">Clip unavailable</p>
+            <Hint placement="above">
+              Placeholder clips are generated, not committed. Run{' '}
+              <code>npm run make-scenarios</code> (needs ffmpeg), or drop a clip at{' '}
+              <code>public{src}</code>. You can still make and grade the call.
+            </Hint>
           </div>
         ) : (
           <video
@@ -138,61 +140,58 @@ export default function ScenarioPlayer({
             onError={() => setMissing(true)}
           />
         )}
+        <div className="pointer-events-none absolute inset-0">{overlay}</div>
       </div>
 
-      {armed ? (
-        <>
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={togglePlay} disabled={missing} className={BUTTON}>
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-line px-3 py-2">
+        {armed ? (
+          <>
+            <button type="button" onClick={togglePlay} disabled={missing} className="btn">
               {playing ? 'Pause' : 'Play'}
             </button>
-            <button type="button" onClick={replay} disabled={missing} className={BUTTON}>
+            <button type="button" onClick={replay} disabled={missing} className="btn">
               Replay
             </button>
             <button
               type="button"
               onClick={() => step(-FRAME_STEP_S)}
               disabled={missing}
-              className={BUTTON}
+              className="btn"
               aria-label="Step back one frame"
             >
-              ◀ Frame
+              ◀
             </button>
             <button
               type="button"
               onClick={() => step(FRAME_STEP_S)}
               disabled={missing}
-              className={BUTTON}
+              className="btn"
               aria-label="Step forward one frame"
             >
-              Frame ▶
+              ▶
             </button>
             <button
               type="button"
               onClick={() => setSlow((value) => !value)}
               disabled={missing}
               aria-pressed={slow}
-              className={`${BUTTON} ${slow ? 'border-sky-500 bg-sky-50 dark:border-sky-500 dark:bg-sky-950/40' : ''}`}
+              aria-label="Slow motion"
+              className="btn"
             >
-              {slow ? 'Slow motion: on' : 'Slow motion: off'}
+              Slow
             </button>
-          </div>
-          {ended ? (
-            <p className="text-sm text-slate-600 dark:text-slate-400">
-              Clip finished — replay it as often as you like; the call is still being captured.
-            </p>
-          ) : null}
-        </>
-      ) : (
-        <button
-          type="button"
-          onClick={onArm}
-          disabled={!canArm}
-          className="rounded-md bg-sky-600 px-4 py-2 text-base font-medium text-white transition-colors hover:bg-sky-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {missing ? 'Get ready to call' : 'Play the phrase'}
-        </button>
-      )}
+            {ended ? <span className="caption">Clip ended · still capturing</span> : null}
+            {children}
+          </>
+        ) : (
+          <>
+            <button type="button" onClick={onArm} disabled={!canArm} className="btn btn-go">
+              {missing ? 'Get ready to call' : 'Play the phrase'}
+            </button>
+            {canArm ? null : <span className="caption">Waiting for camera</span>}
+          </>
+        )}
+      </div>
     </div>
   );
 }

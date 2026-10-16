@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import Scenarios from './Scenarios';
@@ -189,36 +189,40 @@ function spyOnClipPlayback() {
   return play;
 }
 
+/** Each call as "1Attack — right arm"; the arm is a lamp, named for a screen reader. */
 function callsList(): string[] {
-  return screen.getAllByRole('listitem').map((item) => item.textContent ?? '');
+  const list = screen.getByRole('list', { name: /calls so far/i });
+  return within(list)
+    .getAllByRole('listitem')
+    .map((item) => {
+      const side = within(item).queryByRole('img')?.getAttribute('aria-label');
+      return [item.textContent ?? '', side].filter(Boolean).join(' — ');
+    });
 }
 
 describe('Scenarios bank', () => {
-  it('shows the whole bank by default and narrows it by weapon filter', async () => {
+  it('lists the whole bank, each phrase under its weapon', () => {
     render(<Scenarios />);
 
-    expect(
-      screen.getByRole('button', { name: /Both lights, inside the lockout/ })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: /Attack right, parry-riposte left/ })
-    ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Attack right, unopposed/ })).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole('button', { name: 'Épée' }));
+    const column = (weapon: string) =>
+      screen.getByRole('heading', { name: weapon }).closest('li') as HTMLElement;
 
     expect(
-      screen.getByRole('button', { name: /Both lights, inside the lockout/ })
+      within(column('Épée')).getByRole('button', { name: /Both lights, inside the lockout/ })
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: /Attack right, parry-riposte left/ })
-    ).not.toBeInTheDocument();
+      within(column('Foil')).getByRole('button', { name: /Attack right, parry-riposte left/ })
+    ).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: /Attack right, unopposed/ })
-    ).not.toBeInTheDocument();
+      within(column('Sabre')).getByRole('button', { name: /Attack right, unopposed/ })
+    ).toBeInTheDocument();
+  });
 
-    await userEvent.click(screen.getByRole('button', { name: 'All' }));
-    expect(screen.getByRole('button', { name: /Attack right, unopposed/ })).toBeInTheDocument();
+  it('keeps what changes by weapon behind its hint', async () => {
+    render(<Scenarios />);
+
+    await userEvent.hover(screen.getByRole('button', { name: 'About Épée' }));
+    expect(screen.getByRole('tooltip')).toHaveTextContent(/never called: .*attack.*parry/i);
   });
 });
 
@@ -232,17 +236,17 @@ describe('ready → countdown → live → graded', () => {
     // The clip waits for the countdown; opening a scenario does not start it.
     expect(play).not.toHaveBeenCalled();
     // Nothing is being captured yet, so there is no readout to read.
-    expect(screen.queryByText('No signal recognised yet')).not.toBeInTheDocument();
+    expect(screen.queryByText('No signal yet')).not.toBeInTheDocument();
 
     await armAndGetReady(clock);
 
     // Zero: the page starts playback, and the capture window is open.
     expect(play).toHaveBeenCalled();
-    expect(screen.getByText('No signal recognised yet')).toBeInTheDocument();
+    expect(screen.getByText('No signal yet')).toBeInTheDocument();
 
     await clock.hold(ATTACK_RIGHT, 1400);
     await clock.hold(REST, 400);
-    expect(callsList()).toEqual([expect.stringMatching(/1\.\s*Attack — right arm/)]);
+    expect(callsList()).toEqual([expect.stringMatching(/^1Attack — right arm/)]);
 
     // A replay mid-call must not reset or re-arm anything.
     await userEvent.click(screen.getByRole('button', { name: 'Replay' }));
@@ -251,8 +255,8 @@ describe('ready → countdown → live → graded', () => {
     await clock.hold(HIT_SCORED_RIGHT, 1400);
     await clock.hold(REST, 400);
     expect(callsList()).toEqual([
-      expect.stringMatching(/1\.\s*Attack — right arm/),
-      expect.stringMatching(/2\.\s*Hit scored — right arm/),
+      expect.stringMatching(/^1Attack — right arm/),
+      expect.stringMatching(/^2Hit scored — right arm/),
     ]);
 
     await userEvent.click(screen.getByRole('button', { name: /submit call/i }));
@@ -283,7 +287,7 @@ describe('ready → countdown → live → graded', () => {
 
     await clock.hold(ATTACK_RIGHT, COUNTDOWN_MS + 50);
 
-    expect(screen.getByText(/nothing called yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/no calls yet/i)).toBeInTheDocument();
     // And the hold has to be given again, in full, from inside the window.
     await clock.hold(ATTACK_RIGHT, 1400);
     await clock.hold(REST, 400);
@@ -302,7 +306,7 @@ describe('ready → countdown → live → graded', () => {
     expect(callsList()).toHaveLength(1);
 
     await userEvent.click(screen.getByRole('button', { name: /undo last call/i }));
-    expect(screen.getByText(/nothing called yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/no calls yet/i)).toBeInTheDocument();
   });
 });
 
@@ -317,14 +321,14 @@ describe('the legal call vocabulary follows the weapon', () => {
     // Attack is excluded from épée's legal palette (data/rules.ts), so this
     // pose must never be recognised, however long it is held.
     await clock.hold(ATTACK_RIGHT, 1400);
-    expect(screen.getByText('No signal recognised yet')).toBeInTheDocument();
+    expect(screen.getByText('No signal yet')).toBeInTheDocument();
     await clock.hold(REST, 400);
-    expect(screen.getByText(/nothing called yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/no calls yet/i)).toBeInTheDocument();
 
     // Double hit is épée's own call, and still works.
     await clock.hold(DOUBLE_HIT, 1400);
     await clock.hold(REST, 400);
-    expect(callsList()).toEqual([expect.stringMatching(/1\.\s*Double hit/)]);
+    expect(callsList()).toEqual([expect.stringMatching(/^1Double hit/)]);
 
     await userEvent.click(screen.getByRole('button', { name: /submit call/i }));
     expect(screen.getByRole('heading', { name: '1/1 correct' })).toBeInTheDocument();

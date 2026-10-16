@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import CameraStage from '../components/CameraStage';
 import GradeReport from '../components/GradeReport';
+import Hint from '../components/Hint';
 import HoldRing from '../components/HoldRing';
-import PageHeader from '../components/PageHeader';
 import ScenarioPlayer from '../components/ScenarioPlayer';
 import type { ScenarioPlayerHandle } from '../components/ScenarioPlayer';
 import { measure } from '../cv/measurements';
 import type { HandFrame, PoseFrame } from '../cv/types';
-import { WEAPON_RULES, allowedSignals } from '../data/rules';
-import type { Weapon } from '../data/rules';
+import { CORE_SIGNALS, WEAPON_RULES, allowedSignals, weaponRule } from '../data/rules';
+import type { Weapon, WeaponRule } from '../data/rules';
 import { SCENARIOS, scenariosFor } from '../data/scenarios';
 import {
   advanceFrame,
@@ -31,19 +31,16 @@ import type { SignalSpec } from '../signals/evaluator';
  * thing that belongs to the page rather than the engine: which scenario is
  * loaded in the first place. `null` scenario means "showing the bank".
  *
- * The layout is fixed across every phase — clip on the left, live self-view on
- * the right — and so is the camera: `CameraStage` is mounted for the whole
- * scenario view with no `key`, so ready → countdown → live → graded → retry
- * never releases the device or re-prompts for permission. Only the overlay and
- * the transport change with the phase.
+ * The layout is fixed across every phase — the clip fills the screen, the live
+ * self-view sits in its corner — and so is the camera: `CameraStage` is mounted for the whole
+ * scenario view with no `key`, so ready → countdown → live → graded → retry →
+ * next phrase never releases the device or re-prompts for permission. Only the
+ * overlay and the transport change with the phase.
  *
  * Camera-frame handling mirrors PracticeSignals: state is mirrored into a ref
  * so the detection loop's stable callback identity can always reach the
  * latest engine without being torn down and rebuilt every frame.
  */
-
-const BUTTON =
-  'rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium transition-colors hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800';
 
 /** The weapon-legal, calibrated pool the call phase grades against. */
 function poolFor(weapon: Weapon, calibratedSpecs: readonly SignalSpec[]): SignalSpec[] {
@@ -51,35 +48,47 @@ function poolFor(weapon: Weapon, calibratedSpecs: readonly SignalSpec[]): Signal
   return calibratedSpecs.filter((spec) => allowed.has(spec.id));
 }
 
-function ScenarioCard({
-  scenario,
-  onSelect,
-}: {
-  scenario: Scenario;
-  onSelect: (s: Scenario) => void;
-}) {
-  const weapon = WEAPON_RULES.find((rule) => rule.id === scenario.weapon);
+const SIDE_BG = { left: 'bg-lamp-red', right: 'bg-lamp-green' } as const;
+
+function Difficulty({ level }: { level: number }) {
   return (
-    <li>
-      <button
-        type="button"
-        onClick={() => onSelect(scenario)}
-        className="h-full w-full rounded-lg border border-slate-200 p-4 text-left transition-colors hover:border-slate-400 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 dark:border-slate-800 dark:hover:border-slate-600 dark:hover:bg-slate-900"
-      >
-        <span className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">
-          {weapon?.label ?? scenario.weapon}
-        </span>
-        <span className="mt-1 block text-base font-medium">{scenario.title}</span>
-        <span className="mt-2 block text-xs text-slate-500 dark:text-slate-500">
-          Difficulty {scenario.difficulty}
-        </span>
-      </button>
-    </li>
+    <span role="img" aria-label={`Difficulty ${level}`} className="flex shrink-0 gap-1">
+      {[1, 2, 3].map((pip) => (
+        <span
+          key={pip}
+          className={`h-2 w-2 border border-chalk ${pip <= level ? 'bg-chalk' : ''}`}
+        />
+      ))}
+    </span>
   );
 }
 
+/** What changes under this weapon — the part of the rules that decides which calls exist. */
+function WeaponHint({ weapon }: { weapon: WeaponRule }) {
+  const excluded = CORE_SIGNALS.filter((signal) => signal.id in weapon.excluded);
+  return (
+    <Hint label={`About ${weapon.label}`} align="left">
+      <span className="block">{weapon.target}</span>
+      {excluded.length > 0 ? (
+        <span className="mt-2 block text-mute">
+          Never called: {excluded.map((signal) => signal.label).join(', ')}.
+        </span>
+      ) : null}
+    </Hint>
+  );
+}
+
+/**
+ * The phrase to move on to: the next of the same weapon if there is one, and
+ * otherwise the next in the bank. `undefined` at the end of the bank.
+ */
+function nextScenario(current: Scenario): Scenario | undefined {
+  const index = SCENARIOS.indexOf(current);
+  const later = SCENARIOS.slice(index + 1);
+  return later.find((scenario) => scenario.weapon === current.weapon) ?? later[0];
+}
+
 export default function Scenarios() {
-  const [weaponFilter, setWeaponFilter] = useState<Weapon | 'all'>('all');
   const [scenario, setScenario] = useState<Scenario | null>(null);
   const [engine, setEngine] = useState<EngineState | null>(null);
   const engineRef = useRef<EngineState | null>(null);
@@ -157,205 +166,182 @@ export default function Scenarios() {
     if (engineRef.current) apply(restart(engineRef.current));
   }, [apply]);
 
-  const scenariosShown = weaponFilter === 'all' ? SCENARIOS : scenariosFor(weaponFilter);
+  if (!scenario || !engine) {
+    return (
+      <div className="flex min-h-full flex-col">
+        <h1 className="sr-only">Referee</h1>
+        <ul className="grid flex-1 lg:grid-cols-3">
+          {WEAPON_RULES.map((weapon) => (
+            <li
+              key={weapon.id}
+              className="flex flex-col border-b border-line p-5 sm:p-8 lg:border-b-0 lg:border-r lg:last:border-r-0"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <h2 className="display text-7xl sm:text-8xl">{weapon.label}</h2>
+                <WeaponHint weapon={weapon} />
+              </div>
+              <p className="caption mt-2">
+                {weapon.rightOfWay ? 'Right of way' : 'No right of way'}
+              </p>
+
+              <ul className="mt-8 border-t border-line">
+                {scenariosFor(weapon.id).map((item) => (
+                  <li key={item.id} className="border-b border-line">
+                    <button
+                      type="button"
+                      onClick={() => selectScenario(item)}
+                      className="focusable flex w-full items-center justify-between gap-4 px-1 py-4 text-left text-lg transition-colors hover:bg-chalk/5"
+                    >
+                      {item.title}
+                      <Difficulty level={item.difficulty} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
+  const next = nextScenario(scenario);
+  const framing = engine.phase === 'ready' || engine.phase === 'countdown';
+  const heldSpec = pool.find((spec) => spec.id === engine.hold.signal);
+  const heldLabel = engine.hold.signal ? (heldSpec?.label ?? engine.hold.signal) : null;
+  /** Only where the arm names a fencer does its side get a lamp. */
+  const directional = (signal: string) =>
+    pool.find((spec) => spec.id === signal)?.directional ?? false;
 
   return (
-    <>
-      <PageHeader
-        title="Scenarios"
-        lede="Call a phrase as it happens: the camera comes up with the clip, a five-second countdown gets you set, then give the full sequence of signals and get graded against an authored answer key. The legal call vocabulary follows the weapon."
-      />
+    <div className="relative flex h-full min-h-[28rem] flex-col">
+      <h1 className="sr-only">Referee</h1>
 
-      {!scenario || !engine ? (
-        <section>
-          <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by weapon">
-            {(['all', ...WEAPON_RULES.map((rule) => rule.id)] as const).map((id) => (
+      <div className="flex shrink-0 items-center gap-3 border-b border-line px-3 py-2">
+        <button type="button" onClick={backToBank} className="btn">
+          ‹ Phrases
+        </button>
+        <h2 className="display min-w-0 truncate text-2xl">{scenario.title}</h2>
+        <span className="caption hidden sm:inline">{weaponRule(scenario.weapon).label}</span>
+        <Difficulty level={scenario.difficulty} />
+        <Hint className="ml-auto">
+          Frame yourself, then play the phrase. You get five seconds to set. Every signal you hold
+          is captured until you submit, replays included.
+        </Hint>
+      </div>
+
+      <div className="relative min-h-0 flex-1">
+        <ScenarioPlayer
+          key={scenario.id}
+          ref={playerRef}
+          src={scenario.video}
+          armed={engine.phase !== 'ready'}
+          canArm={cameraOn}
+          onArm={arm}
+          overlay={
+            engine.phase === 'live' ? (
+              <div className="absolute bottom-3 left-3 flex max-w-[60%] flex-col items-start gap-2">
+                <div className="hud flex items-center gap-3 px-3 py-2">
+                  <HoldRing
+                    progress={engine.progress}
+                    phase={engine.hold.phase}
+                    side={heldSpec?.directional ? engine.hold.side : null}
+                    className="h-14 w-14 shrink-0"
+                  />
+                  <p className="display text-3xl sm:text-4xl">
+                    {heldLabel ?? <span className="text-mute">No signal yet</span>}
+                  </p>
+                </div>
+
+                {engine.calls.length === 0 ? (
+                  <p className="hud caption px-3 py-1.5">No calls yet</p>
+                ) : (
+                  <ol aria-label="Calls so far" className="flex flex-wrap gap-1.5">
+                    {engine.calls.map((call, index) => (
+                      <li key={index} className="hud flex items-center gap-2 px-2.5 py-1.5">
+                        <span className="caption tabular-nums">{index + 1}</span>
+                        {directional(call.signal) ? (
+                          <span
+                            role="img"
+                            aria-label={`${call.side} arm`}
+                            className={`h-2.5 w-2.5 ${SIDE_BG[call.side]}`}
+                          />
+                        ) : null}
+                        <span className="display text-xl">{call.label}</span>
+                        {call.outcome === 'quick' ? <span className="caption">quick</span> : null}
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </div>
+            ) : null
+          }
+        >
+          {engine.phase === 'live' ? (
+            <>
+              <span className="ml-auto" />
               <button
-                key={id}
                 type="button"
-                onClick={() => setWeaponFilter(id)}
-                aria-pressed={weaponFilter === id}
-                className={`${BUTTON} ${
-                  weaponFilter === id
-                    ? 'border-sky-500 bg-sky-50 dark:border-sky-500 dark:bg-sky-950/40'
-                    : ''
-                }`}
+                onClick={undo}
+                disabled={engine.calls.length === 0}
+                className="btn"
               >
-                {id === 'all' ? 'All' : WEAPON_RULES.find((rule) => rule.id === id)?.label}
+                Undo last call
               </button>
-            ))}
-          </div>
-
-          <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {scenariosShown.map((s) => (
-              <ScenarioCard key={s.id} scenario={s} onSelect={selectScenario} />
-            ))}
-          </ul>
-        </section>
-      ) : (
-        <section className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2 className="text-lg font-semibold tracking-tight">{scenario.title}</h2>
-              <p className="text-sm text-slate-600 dark:text-slate-400">
-                {WEAPON_RULES.find((rule) => rule.id === scenario.weapon)?.label} · Difficulty{' '}
-                {scenario.difficulty}
-              </p>
-            </div>
-            <button type="button" onClick={backToBank} className={BUTTON}>
-              Back to bank
-            </button>
-          </div>
-
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
-            <div>
-              <ScenarioPlayer
-                key={scenario.id}
-                ref={playerRef}
-                src={scenario.video}
-                armed={engine.phase !== 'ready'}
-                canArm={cameraOn}
-                onArm={arm}
-              />
-
-              {engine.phase === 'ready' && !cameraOn ? (
-                <p className="mt-3 max-w-2xl text-sm text-slate-600 dark:text-slate-400">
-                  Waiting for the camera. The countdown is ticked by the camera’s own frames, so the
-                  phrase cannot start until the self-view is live.
-                </p>
-              ) : null}
-            </div>
-
-            {/* No `key`: this stage is mounted for the whole scenario view, so a
-                retry never releases the device or re-prompts for permission. */}
-            <div className="space-y-3">
-              <CameraStage
-                autoStart
-                compact
-                onFrame={onFrame}
-                onRunningChange={onRunningChange}
-                needsHands={pool.some((spec) => spec.needsHands)}
-                overlay={
-                  engine.phase === 'countdown' ? (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/40">
-                      <p className="text-sm font-medium uppercase tracking-wide text-white/80">
-                        Get ready…
-                      </p>
-                      <p
-                        aria-hidden
-                        className="text-6xl font-bold leading-none text-white drop-shadow"
-                      >
-                        {Math.ceil(engine.countdownRemainingMs / 1000)}
-                      </p>
-                    </div>
-                  ) : null
-                }
-              >
-                {engine.phase === 'countdown' ? (
-                  <span
-                    role="status"
-                    className="rounded-md bg-slate-800/80 px-3 py-1.5 text-sm font-medium text-white"
-                  >
-                    Starts in {Math.ceil(engine.countdownRemainingMs / 1000)}…
-                  </span>
-                ) : null}
-              </CameraStage>
-
-              {engine.phase === 'live' ? (
-                <>
-                  <div className="flex items-center gap-3">
-                    <HoldRing
-                      progress={engine.progress}
-                      phase={engine.hold.phase}
-                      className="h-16 w-16 shrink-0"
-                    />
-                    <div className="min-w-0">
-                      <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                        Call the phrase
-                      </p>
-                      <p className="text-lg font-semibold leading-tight">
-                        {engine.hold.signal
-                          ? (pool.find((spec) => spec.id === engine.hold.signal)?.label ??
-                            engine.hold.signal)
-                          : 'No signal recognised yet'}
-                      </p>
-                      {engine.hold.side ? (
-                        <p className="text-sm text-slate-600 dark:text-slate-400">
-                          {engine.hold.side} arm
-                        </p>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div>
-                    <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                      Calls so far
-                    </h3>
-                    {engine.calls.length === 0 ? (
-                      <p className="mt-2 text-sm text-slate-500 dark:text-slate-500">
-                        Nothing called yet.
-                      </p>
-                    ) : (
-                      <ol className="mt-2 space-y-1.5">
-                        {engine.calls.map((call, index) => (
-                          <li
-                            key={index}
-                            className="rounded-md border border-slate-200 px-3 py-1.5 text-sm dark:border-slate-800"
-                          >
-                            <span className="tabular-nums text-slate-500 dark:text-slate-500">
-                              {index + 1}.
-                            </span>{' '}
-                            {call.label}
-                            {call.side ? ` — ${call.side} arm` : ''}
-                            {call.outcome === 'quick' ? (
-                              <span className="ml-1 text-amber-600 dark:text-amber-400">
-                                (quick)
-                              </span>
-                            ) : null}
-                          </li>
-                        ))}
-                      </ol>
-                    )}
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={undo}
-                      disabled={engine.calls.length === 0}
-                      className={BUTTON}
-                    >
-                      Undo last call
-                    </button>
-                    <button
-                      type="button"
-                      onClick={submit}
-                      className="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-sky-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400"
-                    >
-                      Submit call
-                    </button>
-                  </div>
-                </>
-              ) : engine.phase === 'graded' ? null : (
-                <p className="text-sm text-slate-600 dark:text-slate-400">
-                  Get yourself framed. Press “Play the phrase” when you are ready: five seconds to
-                  set, then the clip rolls and every signal you hold is captured — during the
-                  phrase, after it, and across replays — until you submit.
-                </p>
-              )}
-            </div>
-          </div>
-
-          {engine.phase === 'graded' && engine.grade ? (
-            <GradeReport
-              scenario={scenario}
-              grade={engine.grade}
-              onRetry={tryAgain}
-              onChoose={backToBank}
-            />
+              <button type="button" onClick={submit} className="btn btn-go">
+                Submit call
+              </button>
+            </>
           ) : null}
-        </section>
-      )}
-    </>
+        </ScenarioPlayer>
+
+        {/*
+          No `key`: this stage is mounted for the whole scenario view, so a retry
+          never releases the device or re-prompts for permission. It is large
+          while the referee is finding their framing and steps back into the
+          corner once the clip is what they should be watching.
+        */}
+        <div
+          className={`absolute right-3 top-3 z-10 border border-line bg-ink transition-[width] duration-300 ${
+            framing ? 'w-[min(44rem,62%)]' : 'w-[min(20rem,34%)]'
+          }`}
+        >
+          <CameraStage
+            autoStart
+            compact
+            onFrame={onFrame}
+            onRunningChange={onRunningChange}
+            needsHands={pool.some((spec) => spec.needsHands)}
+            overlay={
+              engine.phase === 'countdown' ? (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                  <p aria-hidden className="display text-9xl">
+                    {Math.ceil(engine.countdownRemainingMs / 1000)}
+                  </p>
+                </div>
+              ) : null
+            }
+          >
+            {engine.phase === 'countdown' ? (
+              <span role="status" className="caption text-chalk">
+                Starts in {Math.ceil(engine.countdownRemainingMs / 1000)}…
+              </span>
+            ) : null}
+          </CameraStage>
+        </div>
+      </div>
+
+      {engine.phase === 'graded' && engine.grade ? (
+        <div className="absolute inset-0 z-20 overflow-y-auto bg-ink">
+          <GradeReport
+            scenario={scenario}
+            grade={engine.grade}
+            onRetry={tryAgain}
+            onChoose={backToBank}
+            onNext={next ? () => selectScenario(next) : undefined}
+          />
+        </div>
+      ) : null}
+    </div>
   );
 }

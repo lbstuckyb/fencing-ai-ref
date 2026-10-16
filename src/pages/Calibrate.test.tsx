@@ -1,5 +1,6 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import Calibrate from './Calibrate';
 import type { HandFrame, PoseFrame } from '../cv/types';
@@ -139,9 +140,17 @@ async function startCamera() {
   await waitFor(() => expect(getHandDetector).toHaveBeenCalled());
 }
 
+function renderCalibrate() {
+  return render(
+    <MemoryRouter>
+      <Calibrate />
+    </MemoryRouter>
+  );
+}
+
 describe('Calibrate', () => {
   it('lists every measurement before the camera has been started', () => {
-    render(<Calibrate />);
+    renderCalibrate();
 
     // The page is readable as documentation with nothing running: the rows say
     // what will be measured and what each number means.
@@ -153,7 +162,7 @@ describe('Calibrate', () => {
 
   it('reads the live pose into the anatomically-correct column', async () => {
     const clock = driveAnimationFrames();
-    render(<Calibrate />);
+    renderCalibrate();
     await startCamera();
     await clock.advance(10, 50);
 
@@ -166,7 +175,7 @@ describe('Calibrate', () => {
 
   it('reports hand shape for the hand it can see', async () => {
     const clock = driveAnimationFrames();
-    render(<Calibrate />);
+    renderCalibrate();
     await startCamera();
     await clock.advance(10, 50);
 
@@ -178,7 +187,7 @@ describe('Calibrate', () => {
 
   it('records a hold and reports its spread', async () => {
     const clock = driveAnimationFrames();
-    render(<Calibrate />);
+    renderCalibrate();
     await startCamera();
 
     await userEvent.click(screen.getByRole('button', { name: /record 4 s/i }));
@@ -204,7 +213,7 @@ describe('Calibrate', () => {
     // camera.
     const clock = driveAnimationFrames();
     getPoseDetector.mockResolvedValue({ detect: () => null });
-    render(<Calibrate />);
+    renderCalibrate();
     await startCamera();
 
     await userEvent.click(screen.getByRole('button', { name: /record 4 s/i }));
@@ -217,7 +226,7 @@ describe('Calibrate', () => {
 
   it('blanks the readouts when the camera stops', async () => {
     const clock = driveAnimationFrames();
-    render(<Calibrate />);
+    renderCalibrate();
     await startCamera();
     await clock.advance(10, 50);
     expect(cellFor('elbow', 'right')).toHaveTextContent('180°');
@@ -231,7 +240,7 @@ describe('Calibrate', () => {
 
   it('abandons a recording that the camera stop interrupted', async () => {
     const clock = driveAnimationFrames();
-    render(<Calibrate />);
+    renderCalibrate();
     await startCamera();
 
     await userEvent.click(screen.getByRole('button', { name: /record 4 s/i }));
