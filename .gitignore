@@ -10,10 +10,6 @@ coverage
 public/models/*.task
 public/mediapipe/
 
-# Scenario clips (stage 15) — dropped in locally, not committed
-public/scenarios/*.mp4
-public/scenarios/*.webm
-
 .vscode/*
 !.vscode/extensions.json
 .idea

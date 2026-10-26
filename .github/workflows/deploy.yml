@@ -24,10 +24,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      # Placeholder scenario clips are gitignored (see scripts/make-placeholder-scenarios.mjs)
-      # and reproduced with ffmpeg, which current ubuntu-latest runners no longer ship.
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
-      - run: npm run make-scenarios
       - run: npm run build
         env:
           GH_PAGES: true
