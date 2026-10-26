@@ -123,7 +123,7 @@ export default function ScenarioPlayer({
           <video
             ref={videoRef}
             key={src}
-            src={src}
+            src={`${import.meta.env.BASE_URL}${src.replace(/^\//, '')}`}
             playsInline
             muted
             className="h-full w-full object-contain"
