@@ -1,8 +1,9 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import App from './App';
+import { setLang } from './i18n';
 import { STEPS, TOOLS } from './nav';
 
 function renderAt(path: string) {
@@ -19,6 +20,7 @@ const HEADINGS: Record<string, RegExp> = {
   '/reference': /^learn$/i,
   '/practice': /^drill$/i,
   '/scenarios': /^referee$/i,
+  '/about': /^about$/i,
   '/calibrate': /^calibrate$/i,
   '/calibrate-signals': /^expert calibration$/i,
 };
@@ -86,9 +88,29 @@ describe('navigation', () => {
 });
 
 describe('layout', () => {
-  it('states the on-device processing guarantee behind the about hint', async () => {
+  it('links to the About page, which states the on-device processing guarantee', async () => {
+    const user = userEvent.setup();
     renderAt('/');
-    await userEvent.hover(screen.getByRole('button', { name: 'About' }));
-    expect(screen.getByRole('tooltip')).toHaveTextContent(/no video leaves the browser/i);
+    await user.click(screen.getByRole('link', { name: 'About' }));
+    expect(await screen.findByRole('heading', { level: 1, name: /^about$/i })).toBeVisible();
+    expect(screen.getByText(/no video ever leaves your browser/i)).toBeVisible();
+  });
+});
+
+describe('language', () => {
+  afterEach(() => setLang('en'));
+
+  it('switches the whole app from the selector', async () => {
+    const user = userEvent.setup();
+    renderAt('/about');
+
+    await user.click(screen.getByRole('button', { name: 'es' }));
+    expect(screen.getByRole('button', { name: 'es' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('link', { name: /aprender/i })).toBeVisible();
+    expect(screen.getByRole('heading', { level: 1, name: /acerca de/i })).toBeVisible();
+
+    await user.click(screen.getByRole('button', { name: 'fr' }));
+    expect(screen.getByRole('link', { name: /apprendre/i })).toBeVisible();
+    expect(screen.getByRole('heading', { level: 1, name: /à propos/i })).toBeVisible();
   });
 });

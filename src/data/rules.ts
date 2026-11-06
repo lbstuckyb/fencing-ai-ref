@@ -7,6 +7,8 @@
  * (scenario bank + call-phase signal palette, stage 16).
  */
 
+import { tx } from '../i18n';
+
 /* -------------------------------------------------------------------------- */
 /* Rule documents                                                             */
 /* -------------------------------------------------------------------------- */
@@ -25,9 +27,13 @@ export interface RuleDocument {
  */
 export const FIE_RULES_INDEX: RuleDocument = {
   id: 'fie-rules-index',
-  title: 'FIE rules & documents',
+  get title() {
+    return tx('rules.index.title');
+  },
   url: 'https://fie.org/fie/documents/rules',
-  description: 'The official index — always points at the edition currently in force.',
+  get description() {
+    return tx('rules.index.description');
+  },
 };
 
 /**
@@ -40,21 +46,33 @@ export const RULE_DOCUMENTS_EDITION = 'August 2026';
 export const RULE_DOCUMENTS: readonly RuleDocument[] = [
   {
     id: 'technical',
-    title: 'Technical rules',
+    get title() {
+      return tx('rules.technical.title');
+    },
     url: 'https://static.fie.org/uploads/40/204138-Technical%20rules%20August%202026%20ang.pdf',
-    description: 'Conduct of the bout, right of way, and the referee signals in Article t.63.',
+    get description() {
+      return tx('rules.technical.description');
+    },
   },
   {
     id: 'organisation',
-    title: 'Organisation rules',
+    get title() {
+      return tx('rules.organisation.title');
+    },
     url: 'https://static.fie.org/uploads/40/204123-Organisation%20rules%20August%202026%20ang.pdf',
-    description: 'Competition formats, seeding, and the conduct of events.',
+    get description() {
+      return tx('rules.organisation.description');
+    },
   },
   {
     id: 'material',
-    title: 'Material rules',
+    get title() {
+      return tx('rules.material.title');
+    },
     url: 'https://static.fie.org/uploads/40/204157-book%20material%20August%202026%20ang.pdf',
-    description: 'Weapons, clothing, and scoring apparatus specifications.',
+    get description() {
+      return tx('rules.material.description');
+    },
   },
 ] as const;
 
@@ -71,6 +89,16 @@ export const SIGNAL_ARTICLE = {
 /* Core signals                                                               */
 /* -------------------------------------------------------------------------- */
 
+/** A signal id whose label is read in the current language each time it is asked for. */
+function coreSignal<const Id extends string>(id: Id): { readonly id: Id; readonly label: string } {
+  return {
+    id,
+    get label() {
+      return tx(`signals.${id}.label`);
+    },
+  };
+}
+
 /**
  * The core 10 of the 20 t.63 signals — the scope this app grades by gesture.
  * The ids are the canonical spec ids: `signals/specs.ts` (stage 11) authors one
@@ -78,26 +106,22 @@ export const SIGNAL_ARTICLE = {
  * two can never drift.
  */
 export const CORE_SIGNALS = [
-  { id: 'halt', label: 'Halt' },
-  { id: 'attack', label: 'Attack' },
-  { id: 'parry', label: 'Parry' },
-  { id: 'point_in_line', label: 'Point in line' },
-  { id: 'hit_scored', label: 'Hit scored' },
-  { id: 'hit_against', label: 'Hit against' },
-  { id: 'not_valid', label: 'Not valid' },
-  { id: 'double_hit', label: 'Double hit' },
-  { id: 'simultaneous', label: 'Simultaneous' },
-  { id: 'nothing', label: 'Nothing' },
+  coreSignal('halt'),
+  coreSignal('attack'),
+  coreSignal('parry'),
+  coreSignal('point_in_line'),
+  coreSignal('hit_scored'),
+  coreSignal('hit_against'),
+  coreSignal('not_valid'),
+  coreSignal('double_hit'),
+  coreSignal('simultaneous'),
+  coreSignal('nothing'),
 ] as const;
 
 export type CoreSignalId = (typeof CORE_SIGNALS)[number]['id'];
 
-const SIGNAL_LABELS: Record<CoreSignalId, string> = Object.fromEntries(
-  CORE_SIGNALS.map((signal) => [signal.id, signal.label])
-) as Record<CoreSignalId, string>;
-
 export function signalLabel(id: CoreSignalId): string {
-  return SIGNAL_LABELS[id];
+  return tx(`signals.${id}.label`);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -107,12 +131,9 @@ export function signalLabel(id: CoreSignalId): string {
 /** The four groupings t.63/Figure 3 itself uses, in rulebook order. */
 export type SignalGroup = 'preparatory' | 'phrase_analysis' | 'awarding' | 'administrative';
 
-export const SIGNAL_GROUP_LABELS: Record<SignalGroup, string> = {
-  preparatory: 'Preparatory',
-  phrase_analysis: 'Phrase analysis',
-  awarding: 'Awarding',
-  administrative: 'Administrative',
-};
+export function signalGroupLabel(group: SignalGroup): string {
+  return tx(`groups.${group}`);
+}
 
 /**
  * The ten signals outside the graded core: procedural calls (On guard, Ready?,
@@ -127,64 +148,30 @@ export interface ReferenceSignal {
   description: string;
 }
 
+function referenceSignal(id: string): ReferenceSignal {
+  return {
+    id,
+    get label() {
+      return tx(`signals.${id}.label`);
+    },
+    get description() {
+      return tx(`signals.${id}.description`);
+    },
+  };
+}
+
 export const REFERENCE_SIGNALS: readonly ReferenceSignal[] = [
-  {
-    id: 'on_guard',
-    label: 'On guard',
-    description: 'Signals the fencers to take the on-guard position before the phrase begins.',
-  },
-  {
-    id: 'ready',
-    label: 'Ready?',
-    description: 'Asks both fencers whether they are ready to fence.',
-  },
-  {
-    id: 'play',
-    label: 'Play',
-    description: 'Starts the phrase: the fencers may now fence.',
-  },
-  {
-    id: 'incorrect',
-    label: 'Incorrect',
-    description:
-      "Marks that a fencer's action was incorrectly performed, without awarding a touch.",
-  },
-  {
-    id: 'no',
-    label: 'No',
-    description:
-      "Rejects a fencer's request — for example, an appeal to stop the phrase or claim a touch.",
-  },
-  {
-    id: 'hit_for_each',
-    label: 'Hit for each',
-    description:
-      'Awards the touch to both fencers, distinct from the priority-resolved Double hit call.',
-  },
-  {
-    id: 'technical_touch',
-    label: 'Technical touch',
-    description:
-      'Awards a touch caused by a material or apparatus fault rather than a fencing action.',
-  },
-  {
-    id: 'changing_decision',
-    label: 'Changing decision',
-    description:
-      'Reverses a previous call, typically after consulting the jury or reviewing video.',
-  },
-  {
-    id: 'card',
-    label: 'Card',
-    description:
-      'Shows a yellow, red or black card: a warning, a penalty touch, or exclusion from the competition.',
-  },
-  {
-    id: 'winner',
-    label: 'Winner',
-    description: 'Declares the winner of the bout.',
-  },
-] as const;
+  referenceSignal('on_guard'),
+  referenceSignal('ready'),
+  referenceSignal('play'),
+  referenceSignal('incorrect'),
+  referenceSignal('no'),
+  referenceSignal('hit_for_each'),
+  referenceSignal('technical_touch'),
+  referenceSignal('changing_decision'),
+  referenceSignal('card'),
+  referenceSignal('winner'),
+];
 
 /**
  * All twenty t.63 signals, grouped and in rulebook order — the spine of the
@@ -238,52 +225,49 @@ export interface WeaponRule {
   excluded: Partial<Record<CoreSignalId, string>>;
 }
 
+/**
+ * A weapon's rules, with its words read in the current language. `excluded` is
+ * keyed by the calls the weapon rules out; each value is the reason, in words.
+ */
+function weaponRuleFor(
+  id: Weapon,
+  flags: { rightOfWay: boolean; hasOffTarget: boolean },
+  excludedIds: readonly CoreSignalId[]
+): WeaponRule {
+  const excluded: Partial<Record<CoreSignalId, string>> = {};
+  for (const signal of excludedIds) {
+    Object.defineProperty(excluded, signal, {
+      enumerable: true,
+      get: () => tx(`weapons.${id}.excluded.${signal}`),
+    });
+  }
+  return {
+    id,
+    ...flags,
+    get label() {
+      return tx(`weapons.${id}.label`);
+    },
+    get target() {
+      return tx(`weapons.${id}.target`);
+    },
+    get summary() {
+      return tx(`weapons.${id}.summary`);
+    },
+    excluded,
+  };
+}
+
 export const WEAPON_RULES: readonly WeaponRule[] = [
-  {
-    id: 'epee',
-    label: 'Épée',
-    rightOfWay: false,
-    target: 'The whole body, mask to feet.',
-    hasOffTarget: false,
-    summary:
-      'No priority: whoever lands first scores, and two lights inside the lockout give a hit to each. The referee calls the outcome, never the phrase.',
-    excluded: {
-      attack: 'Épée has no right of way, so the phrase is never analysed for priority.',
-      parry: 'Parry is a priority call, and épée does not use priority.',
-      point_in_line: 'A line only matters because it takes priority — which épée does not award.',
-      not_valid: 'The whole body is target, so no hit can land off-target.',
-      simultaneous:
-        'Simultaneous is a priority call. In épée, two lights inside the lockout are a hit for each.',
-    },
-  },
-  {
-    id: 'foil',
-    label: 'Foil',
-    rightOfWay: true,
-    target: 'The trunk, front and back, plus the lower part of the mask bib.',
-    hasOffTarget: true,
-    summary:
-      'Full priority set. Both lights resolve to one fencer, to no touch when the actions are genuinely simultaneous, or to an off-target hit that stops the bout without scoring.',
-    excluded: {
-      double_hit:
-        'Priority resolves both lights to one fencer or to no touch — foil never awards a hit to each.',
-    },
-  },
-  {
-    id: 'sabre',
-    label: 'Sabre',
-    rightOfWay: true,
-    target: 'Everything above the waist except the hands — mask, arms and trunk.',
-    hasOffTarget: false,
-    summary:
-      'Full priority set, and no off-target: a blow outside the target area simply does not register, so there is nothing to signal.',
-    excluded: {
-      double_hit:
-        'Priority resolves both lights to one fencer or to no touch — sabre never awards a hit to each.',
-      not_valid: 'Sabre has no off-target hit, so there is no invalid hit to signal.',
-    },
-  },
-] as const;
+  weaponRuleFor('epee', { rightOfWay: false, hasOffTarget: false }, [
+    'attack',
+    'parry',
+    'point_in_line',
+    'not_valid',
+    'simultaneous',
+  ]),
+  weaponRuleFor('foil', { rightOfWay: true, hasOffTarget: true }, ['double_hit']),
+  weaponRuleFor('sabre', { rightOfWay: true, hasOffTarget: false }, ['double_hit', 'not_valid']),
+];
 
 const WEAPON_BY_ID: Record<Weapon, WeaponRule> = Object.fromEntries(
   WEAPON_RULES.map((weapon) => [weapon.id, weapon])

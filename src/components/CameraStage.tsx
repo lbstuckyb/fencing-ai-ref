@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import Hint from './Hint';
+import { t, tx } from '../i18n';
 import { getHandDetector, getPoseDetector, LandmarkerError } from '../cv/landmarker';
 import type { HandDetector } from '../cv/landmarker';
 import { createFrameLimiter } from '../cv/loop';
@@ -37,55 +38,39 @@ type FailureKind =
 
 interface Failure {
   kind: FailureKind;
-  title: string;
-  detail: string;
   /** Whether retrying without changing anything could plausibly work. */
   retryable: boolean;
 }
 
+/** Dictionary key of a failure's title and advice: `permission-denied` → `permission_denied`. */
+function failureKey(kind: FailureKind): string {
+  return `camera.failures.${kind.replace(/-/g, '_')}`;
+}
+
+/** Title and advice for each live in the dictionary, under `camera.failures`. */
 const FAILURES: Record<FailureKind, Omit<Failure, 'kind'>> = {
   'insecure-context': {
-    title: 'The browser will not share a camera on this page',
-    detail:
-      'Camera access needs a secure context. Open the app over https, or on localhost during development.',
     retryable: false,
   },
   'permission-denied': {
-    title: 'Camera permission was denied',
-    detail:
-      'Grant camera access for this site — usually the camera icon in the address bar — then start again. Nothing you record is uploaded; the video is processed in this tab and discarded.',
     retryable: true,
   },
   'no-camera': {
-    title: 'No camera found',
-    detail: 'Connect a webcam and start again. The drills need a live view of your upper body.',
     retryable: true,
   },
   'camera-busy': {
-    title: 'The camera is in use',
-    detail: 'Another application or browser tab is holding the camera. Close it, then start again.',
     retryable: true,
   },
   'camera-lost': {
-    title: 'The camera stopped',
-    detail: 'The video track ended — the device may have been unplugged or its permission revoked.',
     retryable: true,
   },
   'model-assets': {
-    title: 'The pose model is missing',
-    detail:
-      'The MediaPipe model and runtime are vendored into public/ rather than fetched from a CDN. Run `npm run fetch-assets`, then start again.',
     retryable: true,
   },
   'model-runtime': {
-    title: 'Pose detection failed to start',
-    detail:
-      'The pose landmarker could not initialise in this browser. A recent Chrome, Edge, Firefox or Safari is required.',
     retryable: true,
   },
   unknown: {
-    title: 'The camera could not be started',
-    detail: 'Something unexpected went wrong. The browser console has the details.',
     retryable: true,
   },
 };
@@ -530,7 +515,7 @@ export default function CameraStage({
                       className="h-2 w-2"
                       style={{ backgroundColor: SKELETON_COLORS.left }}
                     />
-                    your left
+                    {t('side.yourSide.left')}
                   </span>
                   <span className="flex items-center gap-1.5">
                     <span
@@ -538,29 +523,30 @@ export default function CameraStage({
                       className="h-2 w-2"
                       style={{ backgroundColor: SKELETON_COLORS.right }}
                     />
-                    your right
+                    {t('side.yourSide.right')}
                   </span>
                 </p>
               ) : null}
               {terse ? (
                 stats.detections === 0 ? (
-                  <p className="hud caption px-2 py-1 text-chalk">no pose in frame</p>
+                  <p className="hud caption px-2 py-1 text-chalk">{t('camera.noPose')}</p>
                 ) : null
               ) : (
                 <p className="hud px-2 py-1 font-mono text-xs text-chalk">
                   {stats.fps} fps ·{' '}
                   {stats.detections > 0
-                    ? `${stats.landmarks} landmarks @ ${stats.detections}/s`
-                    : 'no pose in frame'}
-                  {needsHands ? ` · ${stats.hands} hand${stats.hands === 1 ? '' : 's'}` : ''}
+                    ? t('camera.landmarks', { n: stats.landmarks, rate: stats.detections })
+                    : t('camera.noPose')}
+                  {needsHands
+                    ? ` · ${t(stats.hands === 1 ? 'camera.hand' : 'camera.hands', { n: stats.hands })}`
+                    : ''}
                 </p>
               )}
               {handsUnavailable ? (
                 <p role="status" className="hud flex items-center gap-2 px-2 py-1 text-xs">
-                  Hand detail is unavailable
+                  {t('camera.handsUnavailable')}
                   <Hint align="left">
-                    The hand model did not load. Arm geometry still grades. Run{' '}
-                    <code>npm run fetch-assets</code>.
+                    {t('camera.handsUnavailableHint')} <code>npm run fetch-assets</code>.
                   </Hint>
                 </p>
               ) : null}
@@ -577,10 +563,10 @@ export default function CameraStage({
                 onClick={start}
                 className={`btn btn-go ${compact ? '' : 'px-6 py-3 text-xl'}`}
               >
-                Start camera
+                {t('camera.start')}
               </button>
-              <Hint label="About the camera" placement="above">
-                Every frame is processed in this tab. Nothing is uploaded or recorded.
+              <Hint label={t('camera.about')} placement="above">
+                {t('camera.aboutHint')}
               </Hint>
             </div>
           </div>
@@ -588,7 +574,7 @@ export default function CameraStage({
 
         {phase === 'starting' ? (
           <div className="absolute inset-0 flex items-center justify-center p-6">
-            <p className="caption animate-pulse">Starting camera…</p>
+            <p className="caption animate-pulse">{t('camera.starting')}</p>
           </div>
         ) : null}
 
@@ -597,11 +583,13 @@ export default function CameraStage({
             role="alert"
             className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center"
           >
-            <p className={`display ${compact ? 'text-xl' : 'text-3xl'}`}>{failure.title}</p>
-            <p className="max-w-md text-sm text-mute">{failure.detail}</p>
+            <p className={`display ${compact ? 'text-xl' : 'text-3xl'}`}>
+              {tx(`${failureKey(failure.kind)}.title`)}
+            </p>
+            <p className="max-w-md text-sm text-mute">{tx(`${failureKey(failure.kind)}.detail`)}</p>
             {failure.retryable ? (
               <button type="button" onClick={start} className="btn btn-go">
-                Try again
+                {t('common.tryAgain')}
               </button>
             ) : null}
           </div>
@@ -616,7 +604,7 @@ export default function CameraStage({
         >
           {running ? (
             <button type="button" onClick={stop} className="btn">
-              Stop camera
+              {t('camera.stop')}
             </button>
           ) : null}
           {running || fill ? children : null}

@@ -1,4 +1,5 @@
 import type { SignalSpec } from '../signals/evaluator';
+import { t } from '../i18n';
 
 /**
  * One signal in a picker: its name, and whether the arm used carries meaning.
@@ -27,7 +28,7 @@ export default function SignalCard({ spec, selected, onSelect }: SignalCardProps
     >
       <span className="display text-2xl">{spec.label}</span>
       {spec.directional ? (
-        <span role="img" aria-label="names a fencer" className="flex shrink-0 gap-1">
+        <span role="img" aria-label={t('practice.namesFencer')} className="flex shrink-0 gap-1">
           <span className="h-2.5 w-2.5 bg-lamp-red" />
           <span className="h-2.5 w-2.5 bg-lamp-green" />
         </span>

@@ -24,6 +24,7 @@
  * whichever side of the mirrored image it appears on. See `Side` in `types.ts`.
  */
 
+import { t, tx } from '../i18n';
 import {
   angleBetween,
   elbowAngle,
@@ -87,12 +88,38 @@ export interface MeasurementGroup {
   rows: MeasurementRow[];
 }
 
-function sided(base: string, label: string, unit: MeasurementUnit, hint: string): SidedRow {
-  return { kind: 'sided', base, label, unit, hint };
+/** Dictionary key of a row's words: ids use dots, keys use them as separators. */
+function rowKey(id: string): string {
+  return `measure.rows.${id.replace(/\./g, '_')}`;
 }
 
-function scalar(id: string, label: string, unit: MeasurementUnit, hint: string): ScalarRow {
-  return { kind: 'scalar', id, label, unit, hint };
+/** Label and hint are getters, so they are read in the current language each time. */
+function sided(base: string, unit: MeasurementUnit): SidedRow {
+  return {
+    kind: 'sided',
+    base,
+    unit,
+    get label() {
+      return tx(`${rowKey(base)}.label`);
+    },
+    get hint() {
+      return tx(`${rowKey(base)}.hint`);
+    },
+  };
+}
+
+function scalar(id: string, unit: MeasurementUnit): ScalarRow {
+  return {
+    kind: 'scalar',
+    id,
+    unit,
+    get label() {
+      return tx(`${rowKey(id)}.label`);
+    },
+    get hint() {
+      return tx(`${rowKey(id)}.hint`);
+    },
+  };
 }
 
 /** The measurement id for one side of a sided row. */
@@ -108,101 +135,65 @@ export function idsOf(row: MeasurementRow): string[] {
 export const MEASUREMENT_GROUPS: readonly MeasurementGroup[] = [
   {
     id: 'arm',
-    label: 'Arm angles',
-    note: 'Measured in the torso frame, so they do not change when you turn away from the camera — watch “off square” below while you check that.',
+    get label() {
+      return tx('measure.groups.arm.label');
+    },
+    get note() {
+      return tx('measure.groups.arm.note');
+    },
     rows: [
-      sided('elbow', 'Elbow', 'deg', '180 straight, 90 square, 0 folded shut'),
-      sided(
-        'upper.elevation',
-        'Upper arm elevation',
-        'deg',
-        '−90 hanging down, 0 level, +90 overhead'
-      ),
-      sided(
-        'upper.abduction',
-        'Upper arm abduction',
-        'deg',
-        'elevation + 90 — the form the t.63 readings use'
-      ),
-      sided(
-        'upper.azimuth',
-        'Upper arm azimuth',
-        'deg',
-        '0 straight ahead, +90 out to that arm’s own side'
-      ),
-      sided(
-        'forearm.elevation',
-        'Forearm elevation',
-        'deg',
-        'near +90 is the vertical forearm of Parry'
-      ),
-      sided(
-        'forearm.azimuth',
-        'Forearm azimuth',
-        'deg',
-        'near +90 is the lateral forearm of Attack'
-      ),
+      sided('elbow', 'deg'),
+      sided('upper.elevation', 'deg'),
+      sided('upper.abduction', 'deg'),
+      sided('upper.azimuth', 'deg'),
+      sided('forearm.elevation', 'deg'),
+      sided('forearm.azimuth', 'deg'),
     ],
   },
   {
     id: 'wrist',
-    label: 'Wrist position',
-    note: 'In torso lengths rather than meters, so one threshold fits a 1.6 m and a 2 m referee. Height is the primary discriminator for the two-armed signals.',
+    get label() {
+      return tx('measure.groups.wrist.label');
+    },
+    get note() {
+      return tx('measure.groups.wrist.note');
+    },
     rows: [
-      sided('wrist.height', 'Height', 'torso', '0 at the hips, 1 at the shoulders'),
-      sided('wrist.vsShoulder', 'Height vs. shoulder', 'torso', '0 is level with that shoulder'),
-      sided(
-        'wrist.vsNose',
-        'Height vs. nose',
-        'torso',
-        'positive is above the nose, as Halt requires'
-      ),
-      sided(
-        'wrist.lateral',
-        'Out from midline',
-        'torso',
-        'positive is away from the body’s centre line'
-      ),
-      sided('wrist.forward', 'Forward of chest', 'torso', 'positive is in front of the chest'),
+      sided('wrist.height', 'torso'),
+      sided('wrist.vsShoulder', 'torso'),
+      sided('wrist.vsNose', 'torso'),
+      sided('wrist.lateral', 'torso'),
+      sided('wrist.forward', 'torso'),
     ],
   },
   {
     id: 'body',
-    label: 'Both arms, and the body',
-    note: 'The two-armed signals separate on these. “Off square” is the invariance check: turn on the spot and every angle above should hold still while this number climbs.',
+    get label() {
+      return tx('measure.groups.body.label');
+    },
+    get note() {
+      return tx('measure.groups.body.note');
+    },
     rows: [
-      scalar(
-        'wrists.gap',
-        'Wrist separation',
-        'ratio',
-        '× shoulder width; under 1 is hands converged'
-      ),
-      scalar(
-        'wrists.heightDelta',
-        'Wrist height difference',
-        'torso',
-        '0 is level — the symmetry Double hit wants'
-      ),
-      scalar('body.turn', 'Off square to camera', 'deg', '0 is facing the camera squarely'),
-      scalar('body.lean', 'Lean from vertical', 'deg', '0 is standing upright'),
-      scalar(
-        'body.torso',
-        'Torso length',
-        'm',
-        'hips to shoulders — the scale every height is divided by'
-      ),
-      scalar('body.shoulderWidth', 'Shoulder width', 'm', 'the reference for wrist separation'),
+      scalar('wrists.gap', 'ratio'),
+      scalar('wrists.heightDelta', 'torso'),
+      scalar('body.turn', 'deg'),
+      scalar('body.lean', 'deg'),
+      scalar('body.torso', 'm'),
+      scalar('body.shoulderWidth', 'm'),
     ],
   },
   {
     id: 'hand',
-    label: 'Hand shape',
-    note: 'Only Halt, Point in line and Nothing read fingers. Each number is tip-to-wrist over knuckle-to-wrist: above 1.15 counts as extended, below 0.95 as curled, and the gap between is deliberately “unknown”.',
+    get label() {
+      return tx('measure.groups.hand.label');
+    },
+    get note() {
+      return tx('measure.groups.hand.note');
+    },
     rows: [
-      ...FINGERS.map((finger) =>
-        sided(`hand.${finger}`, `${finger[0].toUpperCase()}${finger.slice(1)} finger`, 'ratio', '')
-      ),
-      sided('hand.thumb', 'Thumb', 'ratio', 'reported only — no shape is classified on it'),
+      ...FINGERS.map((finger) => sided(`hand.${finger}`, 'ratio')),
+      sided('hand.thumb', 'ratio'),
     ],
   },
 ];
@@ -245,9 +236,13 @@ export const MEASUREMENT_BY_ID: ReadonlyMap<string, MeasurementInfo> = new Map(
         id,
         {
           id,
-          label: row.label,
+          get label() {
+            return row.label;
+          },
           unit: row.unit,
-          hint: row.hint,
+          get hint() {
+            return row.hint;
+          },
           side: sideOfMeasurementId(id),
           group: group.id,
         },
@@ -416,14 +411,7 @@ export function formatMeasurement(value: number | null, unit: MeasurementUnit): 
   }
 }
 
-const SHAPE_LABELS: Record<HandShape, string> = {
-  open_palm: 'open palm',
-  fist: 'fist',
-  index_point: 'index point',
-  unknown: 'unknown',
-};
-
 /** Hand shape in words; `null` means that hand was not detected at all. */
 export function formatShape(shape: HandShape | null): string {
-  return shape === null ? 'not detected' : SHAPE_LABELS[shape];
+  return t(`shapes.${shape ?? 'none'}`);
 }

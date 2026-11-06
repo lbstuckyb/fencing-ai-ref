@@ -32,6 +32,7 @@
 
 import type { Side } from '../cv/types';
 import { signalLabel } from '../data/rules';
+import { t } from '../i18n';
 import type { CapturedCall } from './engine';
 import { gestureSteps } from './schema';
 import type { GestureStep, Scenario } from './schema';
@@ -120,34 +121,40 @@ function alignInOrder(
 /* -------------------------------------------------------------------------- */
 
 function sideNote(side: Side | null): string {
-  return side ? ` with your ${side} arm` : '';
+  return side ? t('grade.sideNote', { arm: t(`side.yourArm.${side}`) }) : '';
+}
+
+/** The expected step's signal and arm, as every message names them. */
+function stepVars(step: GestureStep) {
+  return { signal: signalLabel(step.signal), sideNote: sideNote(step.side) };
 }
 
 function correctMessage(step: GestureStep): string {
-  return `${signalLabel(step.signal)}${sideNote(step.side)} — correct.`;
+  return t('grade.msgCorrect', stepVars(step));
 }
 
 function outOfOrderMessage(step: GestureStep): string {
-  return `${signalLabel(step.signal)}${sideNote(step.side)} was made correctly, but out of order.`;
+  return t('grade.msgOutOfOrder', stepVars(step));
 }
 
 function wrongSideMessage(step: GestureStep, call: CapturedCall): string {
-  return (
-    `${signalLabel(step.signal)} was right, but made with your ${call.side} arm — ` +
-    `this one names the fencer on your ${step.side}.`
-  );
+  return t('grade.msgWrongSide', {
+    signal: signalLabel(step.signal),
+    callArm: t(`side.yourArm.${call.side}`),
+    side: step.side ? t(`side.yourSide.${step.side}`) : '',
+  });
 }
 
 function wrongSignalMessage(step: GestureStep, call: CapturedCall): string {
-  return `Expected ${signalLabel(step.signal)}${sideNote(step.side)}, but you called ${call.label} here instead.`;
+  return t('grade.msgWrongSignal', { ...stepVars(step), call: call.label });
 }
 
 function missingMessage(step: GestureStep): string {
-  return `${signalLabel(step.signal)}${sideNote(step.side)} was never called.`;
+  return t('grade.msgMissing', stepVars(step));
 }
 
 function extraMessage(call: CapturedCall): string {
-  return `You also called ${call.label}${sideNote(call.side)}, which was not part of this phrase.`;
+  return t('grade.msgExtra', { call: call.label, sideNote: sideNote(call.side) });
 }
 
 /* -------------------------------------------------------------------------- */

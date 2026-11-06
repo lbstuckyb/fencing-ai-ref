@@ -1,5 +1,6 @@
-import type { ExtraVerdict, ScenarioGrade, StepStatus, StepVerdict } from '../scenario/grading';
+import type { ExtraVerdict, ScenarioGrade, StepVerdict } from '../scenario/grading';
 import type { Scenario } from '../scenario/schema';
+import { has, t, tx } from '../i18n';
 
 /**
  * The result of a call phase: the full expected sequence — spoken-only steps
@@ -11,14 +12,6 @@ import type { Scenario } from '../scenario/schema';
  * first would answer the question before the referee has seen their own
  * mistakes named.
  */
-
-const STATUS_LABEL: Record<StepStatus, string> = {
-  correct: 'Correct',
-  out_of_order: 'Out of order',
-  wrong_side: 'Wrong arm',
-  wrong_signal: 'Wrong signal',
-  missing: 'Missing',
-};
 
 const ROW = 'flex items-baseline gap-4 border-b border-line py-3';
 const TAG = 'caption w-28 shrink-0';
@@ -32,11 +25,17 @@ function StepRow({ verdict }: StepRowProps) {
   return (
     <li data-status={verdict.status} className={ROW}>
       <span className={`${TAG} ${correct ? 'text-chalk' : ''}`}>
-        {STATUS_LABEL[verdict.status]}
+        {t(`grade.${verdict.status}`)}
       </span>
       <span className={correct ? 'text-lg' : 'text-lg text-chalk/70'}>{verdict.message}</span>
     </li>
   );
+}
+
+/** A spoken call in the current language, when the dictionary has it; else as authored. */
+function spoken(phrase: string): string {
+  const key = `spoken.${phrase}`;
+  return has(key) ? tx(key) : phrase;
 }
 
 interface SpokenRowProps {
@@ -46,8 +45,8 @@ interface SpokenRowProps {
 function SpokenRow({ say }: SpokenRowProps) {
   return (
     <li className={ROW}>
-      <span className={TAG}>Spoken</span>
-      <span className="text-lg text-mute">“{say[0]}”</span>
+      <span className={TAG}>{t('grade.spoken')}</span>
+      <span className="text-lg text-mute">“{spoken(say[0])}”</span>
     </li>
   );
 }
@@ -55,7 +54,7 @@ function SpokenRow({ say }: SpokenRowProps) {
 function ExtraRow({ verdict }: { verdict: ExtraVerdict }) {
   return (
     <li className={ROW}>
-      <span className={TAG}>Extra</span>
+      <span className={TAG}>{t('grade.extra')}</span>
       <span className="text-lg text-chalk/70">{verdict.message}</span>
     </li>
   );
@@ -101,7 +100,7 @@ export default function GradeReport({
       <div role="status" className="shrink-0 animate-rise">
         <p className="display text-[clamp(6rem,20vw,15rem)] tabular-nums">{percent}%</p>
         <h2 className="caption mt-2 text-lg text-chalk">
-          {grade.correct}/{grade.total} correct
+          {t('grade.correctCount', { correct: grade.correct, total: grade.total })}
         </h2>
       </div>
 
@@ -110,7 +109,7 @@ export default function GradeReport({
 
         {grade.extra.length > 0 ? (
           <div>
-            <h3 className="caption">Extra calls</h3>
+            <h3 className="caption">{t('grade.extraCalls')}</h3>
             <ul className="mt-2 border-t border-line">
               {grade.extra.map((verdict, index) => (
                 <ExtraRow key={index} verdict={verdict} />
@@ -120,20 +119,20 @@ export default function GradeReport({
         ) : null}
 
         <div>
-          <h3 className="caption">What happened</h3>
+          <h3 className="caption">{t('grade.whatHappened')}</h3>
           <p className="mt-1 text-lg">{scenario.explanation}</p>
         </div>
 
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={onRetry} className="btn">
-            Try again
+            {t('grade.tryAgain')}
           </button>
           <button type="button" onClick={onChoose} className="btn">
-            All phrases
+            {t('grade.allPhrases')}
           </button>
           {onNext ? (
             <button type="button" onClick={onNext} className="btn btn-go ml-auto">
-              Next phrase ›
+              {t('grade.nextPhrase')}
             </button>
           ) : null}
         </div>

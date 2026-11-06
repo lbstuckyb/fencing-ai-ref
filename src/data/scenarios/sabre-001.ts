@@ -16,4 +16,16 @@ export const SABRE_001: Scenario = {
     { signal: 'hit_scored', side: 'right', say: ['touch right', 'hit right'] },
   ],
   explanation: 'The attack from the right meets no answer and lands. The touch is right’s.',
+  translations: {
+    es: {
+      title: 'Ataque derecha, sin oposición',
+      explanation:
+        'El ataque de la derecha no encuentra respuesta y llega. El tocado es de la derecha.',
+    },
+    fr: {
+      title: 'Attaque à droite, sans opposition',
+      explanation:
+        'L’attaque de droite ne rencontre aucune réponse et arrive. La touche est pour la droite.',
+    },
+  },
 };

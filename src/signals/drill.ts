@@ -45,6 +45,7 @@
 
 import type { Measurements } from '../cv/measurements';
 import type { Side } from '../cv/types';
+import { t } from '../i18n';
 import { advanceStability, evaluate, idleStability } from './evaluator';
 import type { Evaluation, SignalSpec, Stability } from './evaluator';
 import {
@@ -155,10 +156,11 @@ export function attemptPassed(attempt: Attempt): boolean {
 }
 
 function wrongSideMessage(prompt: DrillPrompt, side: Side): string {
-  return (
-    `That is a correct ${prompt.spec.label}, but made with your ${side} arm. ` +
-    `The signal names the fencer on that side, so this one has to be your ${prompt.side} arm.`
-  );
+  return t('coaching.wrongSide', {
+    signal: prompt.spec.label,
+    arm: t(`side.yourArm.${side}`),
+    prompted: prompt.side ? t(`side.yourArm.${prompt.side}`) : '',
+  });
 }
 
 function attemptFrom(result: HoldResult, prompt: DrillPrompt, atMs: number): Attempt {

@@ -2,6 +2,7 @@ import type { Attempt, DrillPrompt } from '../signals/drill';
 import type { Evaluation } from '../signals/evaluator';
 import type { HoldPhase } from '../signals/holdMachine';
 import Hint from './Hint';
+import { t } from '../i18n';
 
 /**
  * What the drill has to say about the gesture being made right now, and about
@@ -19,14 +20,14 @@ import Hint from './Hint';
 const SIDE_TEXT = { left: 'text-lamp-red', right: 'text-lamp-green' } as const;
 
 function verdictTitle(attempt: Attempt): string {
-  const seconds = (attempt.heldMs / 1000).toFixed(1);
+  const signal = attempt.label;
   switch (attempt.outcome) {
     case 'pass':
-      return `${attempt.label} — held ${seconds} s`;
+      return t('feedbackUi.held', { signal, s: (attempt.heldMs / 1000).toFixed(1) });
     case 'quick':
-      return `${attempt.label} — too quick`;
+      return t('feedbackUi.quick', { signal });
     case 'wrong_side':
-      return `${attempt.label} — wrong arm`;
+      return t('feedbackUi.wrongArm', { signal });
   }
 }
 
@@ -52,7 +53,7 @@ export default function Feedback({ prompt, evaluation, attempt, wrongArm, phase 
         >
           <span className="caption text-chalk">{verdictTitle(attempt)}</span>
           {attempt.message ? (
-            <Hint label="Why" align="left" placement="above">
+            <Hint label={t('common.why')} align="left" placement="above">
               {attempt.message}
             </Hint>
           ) : null}
@@ -61,17 +62,20 @@ export default function Feedback({ prompt, evaluation, attempt, wrongArm, phase 
 
       {evaluation === null ? null : wrongArm && prompt.side ? (
         <p className="hud display px-3 py-2 text-3xl sm:text-4xl">
-          Wrong arm — use your <span className={SIDE_TEXT[prompt.side]}>{prompt.side}</span>
+          {t('feedbackUi.wrongArmUse')}{' '}
+          <span className={SIDE_TEXT[prompt.side]}>{t(`side.arm.${prompt.side}`)}</span>
         </p>
       ) : evaluation.pass ? (
         <p className="hud display px-3 py-2 text-3xl sm:text-4xl">
-          {phase === 'held' ? 'Held' : 'Hold it'}
+          {phase === 'held' ? t('feedbackUi.holding') : t('feedbackUi.holdIt')}
         </p>
       ) : evaluation.failures.length > 0 ? (
         <p className="hud px-3 py-2 text-2xl font-medium sm:text-3xl">
           {evaluation.failures[0].message}
           <span className="caption ml-3 whitespace-nowrap">
-            shape {Math.round(Math.min(1, Math.max(0, evaluation.score)) * 100)}%
+            {t('feedbackUi.shape', {
+              n: Math.round(Math.min(1, Math.max(0, evaluation.score)) * 100),
+            })}
           </span>
         </p>
       ) : null}

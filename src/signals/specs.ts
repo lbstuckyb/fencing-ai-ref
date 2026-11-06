@@ -76,6 +76,7 @@
  */
 
 import { signalLabel } from '../data/rules';
+import { tx } from '../i18n';
 import type { CoreSignalId } from '../data/rules';
 import { T63_HOLD_MS } from './holdMachine';
 import {
@@ -100,7 +101,6 @@ import type { Band, Constraint, SignalSpec } from './evaluator';
 
 interface SpecInput {
   id: CoreSignalId;
-  description: string;
   directional: boolean;
   constraints: readonly Constraint[];
 }
@@ -114,12 +114,17 @@ interface SpecInput {
  * reason `validateSpec` checks it: a spec that reads fingers without asking for
  * the hand model fails every frame with nothing on screen to say why.
  */
-function coreSpec({ id, description, directional, constraints }: SpecInput): SignalSpec {
+function coreSpec({ id, directional, constraints }: SpecInput): SignalSpec {
   return {
     id,
-    label: signalLabel(id),
+    // Getters, so the words follow the current language.
+    get label() {
+      return signalLabel(id);
+    },
     rule: 't.63',
-    description,
+    get description() {
+      return tx(`signals.${id}.description`);
+    },
     holdMs: T63_HOLD_MS,
     needsHands: constraints.some((constraint) => constraint.kind === 'hand'),
     directional,
@@ -182,7 +187,7 @@ const CONVERGED_ARM: Band = [140, 180];
 /** "The other arm is down" — the first thing every one-armed signal requires. */
 function offArmDown() {
   return wristHeight('L', [null, OFF_ARM_MAX_HEIGHT], {
-    feedback: 'Keep your other arm down at your side',
+    feedback: 'feedback.offArmDown',
   });
 }
 
@@ -207,14 +212,12 @@ function offArmDown() {
  */
 export const HALT: SignalSpec = coreSpec({
   id: 'halt',
-  description:
-    'One arm raised straight overhead with the palm open: stop fencing. The other arm stays down.',
   directional: false,
   constraints: [
-    elbow('R', STRAIGHT_ARM, { feedback: 'Straighten your raised arm fully' }),
-    abduction('R', [150, 180], { feedback: 'Take your arm straight up overhead' }),
-    wristVsNose('R', [0.15, null], { feedback: 'Raise your hand above your head' }),
-    hand('R', 'open_palm', { feedback: 'Open your raised hand fully, palm forward' }),
+    elbow('R', STRAIGHT_ARM, { feedback: 'feedback.haltStraighten' }),
+    abduction('R', [150, 180], { feedback: 'feedback.haltOverhead' }),
+    wristVsNose('R', [0.15, null], { feedback: 'feedback.haltAboveHead' }),
+    hand('R', 'open_palm', { feedback: 'feedback.haltOpenHand' }),
     offArmDown(),
   ],
 });
@@ -239,19 +242,17 @@ export const HALT: SignalSpec = coreSpec({
  */
 export const ATTACK: SignalSpec = coreSpec({
   id: 'attack',
-  description:
-    'The signalling arm out to the side with the elbow bent, forearm pointing at the fencer who attacked. The same gesture serves for stop-hit, counter-attack and remise, which are named aloud.',
   directional: true,
   constraints: [
     elbow('R', [95, BENT_ARM_MAX], {
-      feedback: 'Bend your elbow — a straight arm is a different signal',
+      feedback: 'feedback.attackBend',
     }),
-    abduction('R', [55, 110], { feedback: 'Bring your upper arm out to shoulder height' }),
+    abduction('R', [55, 110], { feedback: 'feedback.attackShoulderHeight' }),
     azimuth('R', [45, 135], 'forearm', {
-      feedback: 'Point your forearm out to the side, at the fencer who attacked',
+      feedback: 'feedback.attackForearm',
     }),
-    wristVsShoulder('R', [-0.35, 0.22], { feedback: 'Hold your hand level with your shoulder' }),
-    wristLateral('R', [0.7, null], { feedback: 'Take the signal out to the side, not forward' }),
+    wristVsShoulder('R', [-0.35, 0.22], { feedback: 'feedback.handLevelShoulder' }),
+    wristLateral('R', [0.7, null], { feedback: 'feedback.attackOutToSide' }),
     offArmDown(),
   ],
 });
@@ -273,18 +274,16 @@ export const ATTACK: SignalSpec = coreSpec({
  */
 export const PARRY: SignalSpec = coreSpec({
   id: 'parry',
-  description:
-    'The forearm raised near-vertical beside the head with the elbow low, mimicking a parry: the fencer on that side parried. Counter-time uses the same gesture.',
   directional: true,
   constraints: [
-    elbow('R', [50, 118], { feedback: 'Bend your elbow to about a right angle' }),
+    elbow('R', [50, 118], { feedback: 'feedback.bendRightAngle' }),
     elevation('R', [55, 105], 'forearm', {
-      feedback: 'Bring your forearm up towards vertical, as if parrying',
+      feedback: 'feedback.parryForearm',
     }),
-    abduction('R', [25, 78], { feedback: 'Keep your elbow low — only the forearm comes up' }),
-    wristVsShoulder('R', [0.1, null], { feedback: 'Raise your hand above your shoulder' }),
+    abduction('R', [25, 78], { feedback: 'feedback.parryElbowLow' }),
+    wristVsShoulder('R', [0.1, null], { feedback: 'feedback.parryAboveShoulder' }),
     wristLateral('R', [null, 0.62], {
-      feedback: 'Keep your hand beside your head, not out to the side',
+      feedback: 'feedback.parryBesideHead',
     }),
     offArmDown(),
   ],
@@ -304,16 +303,14 @@ export const PARRY: SignalSpec = coreSpec({
  */
 export const POINT_IN_LINE: SignalSpec = coreSpec({
   id: 'point_in_line',
-  description:
-    'The arm extended straight out to the side with the index finger pointed at the fencer who established the point in line.',
   directional: true,
   constraints: [
-    elbow('R', STRAIGHT_ARM, { feedback: 'Extend your arm fully' }),
-    abduction('R', [65, 115], { feedback: 'Hold your arm out at shoulder height' }),
-    wristVsShoulder('R', [-0.3, 0.3], { feedback: 'Hold your hand level with your shoulder' }),
-    wristLateral('R', [0.85, null], { feedback: 'Point straight out to the side' }),
+    elbow('R', STRAIGHT_ARM, { feedback: 'feedback.extendFully' }),
+    abduction('R', [65, 115], { feedback: 'feedback.armShoulderHeight' }),
+    wristVsShoulder('R', [-0.3, 0.3], { feedback: 'feedback.handLevelShoulder' }),
+    wristLateral('R', [0.85, null], { feedback: 'feedback.pointOutToSide' }),
     hand('R', 'index_point', {
-      feedback: 'Point with your index finger — an open hand is “hit against”',
+      feedback: 'feedback.pointIndex',
     }),
     offArmDown(),
   ],
@@ -336,15 +333,13 @@ export const POINT_IN_LINE: SignalSpec = coreSpec({
  */
 export const HIT_SCORED: SignalSpec = coreSpec({
   id: 'hit_scored',
-  description:
-    'The arm raised out and up on the side of the fencer who scored, elbow at about a right angle: the hit is theirs.',
   directional: true,
   constraints: [
-    elbow('R', [55, 125], { feedback: 'Bend your elbow to about a right angle' }),
-    abduction('R', [78, 145], { feedback: 'Raise your whole arm out to the scorer’s side' }),
-    wristVsShoulder('R', [0.32, null], { feedback: 'Raise your hand well above your shoulder' }),
+    elbow('R', [55, 125], { feedback: 'feedback.bendRightAngle' }),
+    abduction('R', [78, 145], { feedback: 'feedback.hitRaiseArm' }),
+    wristVsShoulder('R', [0.32, null], { feedback: 'feedback.hitHandHigh' }),
     wristLateral('R', [0.7, null], {
-      feedback: 'Raise the arm out on the scorer’s side, not in front of your head',
+      feedback: 'feedback.hitScorerSide',
     }),
     offArmDown(),
   ],
@@ -362,16 +357,14 @@ export const HIT_SCORED: SignalSpec = coreSpec({
  */
 export const HIT_AGAINST: SignalSpec = coreSpec({
   id: 'hit_against',
-  description:
-    'The arm extended straight out to the side with a flat hand, on the side of the fencer against whom the hit was scored.',
   directional: true,
   constraints: [
-    elbow('R', STRAIGHT_ARM, { feedback: 'Extend your arm fully' }),
-    abduction('R', [70, 110], { feedback: 'Hold your arm out at shoulder height' }),
-    wristVsShoulder('R', [-0.3, 0.3], { feedback: 'Hold your hand level with your shoulder' }),
-    wristLateral('R', [0.85, null], { feedback: 'Take your arm straight out to the side' }),
+    elbow('R', STRAIGHT_ARM, { feedback: 'feedback.extendFully' }),
+    abduction('R', [70, 110], { feedback: 'feedback.armShoulderHeight' }),
+    wristVsShoulder('R', [-0.3, 0.3], { feedback: 'feedback.handLevelShoulder' }),
+    wristLateral('R', [0.85, null], { feedback: 'feedback.againstOutToSide' }),
     hand('R', 'open_palm', {
-      feedback: 'Show a flat, open hand — a pointed finger is “point in line”',
+      feedback: 'feedback.againstFlatHand',
     }),
     offArmDown(),
   ],
@@ -391,17 +384,15 @@ export const HIT_AGAINST: SignalSpec = coreSpec({
  */
 export const NOT_VALID: SignalSpec = coreSpec({
   id: 'not_valid',
-  description:
-    'The arm extended straight down and out towards the floor on that fencer’s side: their hit landed off-target and does not count.',
   directional: true,
   constraints: [
-    elbow('R', STRAIGHT_ARM, { feedback: 'Keep the arm straight' }),
+    elbow('R', STRAIGHT_ARM, { feedback: 'feedback.keepStraight' }),
     elevation('R', [-72, -28], 'upper', {
-      feedback: 'Angle the arm down towards the floor, about halfway to your side',
+      feedback: 'feedback.notValidAngle',
     }),
-    wristVsShoulder('R', [null, -0.45], { feedback: 'Hold your hand well below your shoulder' }),
+    wristVsShoulder('R', [null, -0.45], { feedback: 'feedback.notValidBelowShoulder' }),
     wristLateral('R', [0.75, null], {
-      feedback: 'Take the arm out away from your body, not straight down in front',
+      feedback: 'feedback.notValidAway',
     }),
     offArmDown(),
   ],
@@ -423,17 +414,15 @@ export const NOT_VALID: SignalSpec = coreSpec({
  */
 export const DOUBLE_HIT: SignalSpec = coreSpec({
   id: 'double_hit',
-  description:
-    'Both arms extended sideways at shoulder height: both fencers scored — a double hit, which counts for both in épée.',
   directional: false,
   constraints: [
-    elbow('R', STRAIGHT_ARM, { feedback: 'Straighten both arms fully out to the sides' }),
-    elbow('L', STRAIGHT_ARM, { feedback: 'Straighten both arms fully out to the sides' }),
-    wristHeight('R', [0.78, 1.3], { feedback: 'Raise both hands to shoulder height' }),
-    wristHeight('L', [0.78, 1.3], { feedback: 'Raise both hands to shoulder height' }),
-    wristLateral('R', [0.8, null], { feedback: 'Take both arms out to the sides, not forward' }),
-    wristLateral('L', [0.8, null], { feedback: 'Take both arms out to the sides, not forward' }),
-    symmetry('wrist.height', LEVEL_ARMS, { feedback: 'Hold both arms level with each other' }),
+    elbow('R', STRAIGHT_ARM, { feedback: 'feedback.doubleStraighten' }),
+    elbow('L', STRAIGHT_ARM, { feedback: 'feedback.doubleStraighten' }),
+    wristHeight('R', [0.78, 1.3], { feedback: 'feedback.doubleShoulderHeight' }),
+    wristHeight('L', [0.78, 1.3], { feedback: 'feedback.doubleShoulderHeight' }),
+    wristLateral('R', [0.8, null], { feedback: 'feedback.doubleOutToSides' }),
+    wristLateral('L', [0.8, null], { feedback: 'feedback.doubleOutToSides' }),
+    symmetry('wrist.height', LEVEL_ARMS, { feedback: 'feedback.bothLevel' }),
   ],
 });
 
@@ -451,18 +440,16 @@ export const DOUBLE_HIT: SignalSpec = coreSpec({
  */
 export const SIMULTANEOUS: SignalSpec = coreSpec({
   id: 'simultaneous',
-  description:
-    'Both arms brought forward with the hands converging in front of the chest: the two attacks were simultaneous, so no hit is awarded.',
   directional: false,
   constraints: [
-    elbow('R', CONVERGED_ARM, { feedback: 'Extend both arms forward' }),
-    elbow('L', CONVERGED_ARM, { feedback: 'Extend both arms forward' }),
-    wristHeight('R', [0.33, 0.74], { feedback: 'Hold both hands at chest height' }),
-    wristHeight('L', [0.33, 0.74], { feedback: 'Hold both hands at chest height' }),
-    wristForward('R', [0.4, null], { feedback: 'Bring both arms out in front of you' }),
-    wristForward('L', [0.4, null], { feedback: 'Bring both arms out in front of you' }),
-    wristGap([null, 0.85], { feedback: 'Bring your hands together in front of you' }),
-    symmetry('wrist.height', LEVEL_ARMS, { feedback: 'Hold both arms level with each other' }),
+    elbow('R', CONVERGED_ARM, { feedback: 'feedback.simultaneousExtend' }),
+    elbow('L', CONVERGED_ARM, { feedback: 'feedback.simultaneousExtend' }),
+    wristHeight('R', [0.33, 0.74], { feedback: 'feedback.simultaneousChest' }),
+    wristHeight('L', [0.33, 0.74], { feedback: 'feedback.simultaneousChest' }),
+    wristForward('R', [0.4, null], { feedback: 'feedback.simultaneousInFront' }),
+    wristForward('L', [0.4, null], { feedback: 'feedback.simultaneousInFront' }),
+    wristGap([null, 0.85], { feedback: 'feedback.simultaneousTogether' }),
+    symmetry('wrist.height', LEVEL_ARMS, { feedback: 'feedback.bothLevel' }),
   ],
 });
 
@@ -483,23 +470,21 @@ export const SIMULTANEOUS: SignalSpec = coreSpec({
  */
 export const NOTHING: SignalSpec = coreSpec({
   id: 'nothing',
-  description:
-    'Both arms extended low and forward with the palms turned down: no hit is awarded — the phrase produced nothing.',
   directional: false,
   constraints: [
-    elbow('R', STRAIGHT_ARM, { feedback: 'Straighten both arms' }),
-    elbow('L', STRAIGHT_ARM, { feedback: 'Straighten both arms' }),
-    wristHeight('R', [null, 0.25], { feedback: 'Lower both hands below your waist' }),
-    wristHeight('L', [null, 0.25], { feedback: 'Lower both hands below your waist' }),
+    elbow('R', STRAIGHT_ARM, { feedback: 'feedback.nothingStraighten' }),
+    elbow('L', STRAIGHT_ARM, { feedback: 'feedback.nothingStraighten' }),
+    wristHeight('R', [null, 0.25], { feedback: 'feedback.nothingLow' }),
+    wristHeight('L', [null, 0.25], { feedback: 'feedback.nothingLow' }),
     wristForward('R', [0.35, null], {
-      feedback: 'Reach both arms forward, not down at your sides',
+      feedback: 'feedback.nothingForward',
     }),
     wristForward('L', [0.35, null], {
-      feedback: 'Reach both arms forward, not down at your sides',
+      feedback: 'feedback.nothingForward',
     }),
-    hand('R', 'open_palm', { feedback: 'Open both hands, palms turned down' }),
-    hand('L', 'open_palm', { feedback: 'Open both hands, palms turned down' }),
-    symmetry('wrist.height', LEVEL_ARMS, { feedback: 'Hold both arms level with each other' }),
+    hand('R', 'open_palm', { feedback: 'feedback.nothingOpen' }),
+    hand('L', 'open_palm', { feedback: 'feedback.nothingOpen' }),
+    symmetry('wrist.height', LEVEL_ARMS, { feedback: 'feedback.bothLevel' }),
   ],
 });
 

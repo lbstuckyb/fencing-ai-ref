@@ -14,6 +14,7 @@
  * `gestureSteps` drops it before grading ever sees it.
  */
 
+import type { Lang } from '../i18n';
 import type { Side } from '../cv/types';
 import { isSignalAllowed, signalLabel } from '../data/rules';
 import type { CoreSignalId, Weapon } from '../data/rules';
@@ -38,6 +39,13 @@ export interface Scenario {
   difficulty: number;
   expect: readonly ScenarioStep[];
   /** Shown after grading, so the drill teaches rather than just scores. */
+  explanation: string;
+  /** `title` and `explanation` in other languages; English is the fields above. */
+  translations?: Partial<Record<Lang, ScenarioText>>;
+}
+
+export interface ScenarioText {
+  title: string;
   explanation: string;
 }
 
