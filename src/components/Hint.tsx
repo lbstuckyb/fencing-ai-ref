@@ -1,5 +1,6 @@
 import { useCallback, useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { t } from '../i18n';
 
 /**
  * The "?" — where an explanation lives once it has been taken off the page.
@@ -22,7 +23,7 @@ interface HintProps {
 
 export default function Hint({
   children,
-  label = 'More info',
+  label = t('common.moreInfo'),
   align = 'right',
   placement = 'below',
   className = '',

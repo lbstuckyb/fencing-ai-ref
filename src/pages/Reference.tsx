@@ -5,11 +5,11 @@ import {
   FIE_RULES_INDEX,
   REFERENCE_SIGNALS,
   RULE_DOCUMENTS,
-  RULE_DOCUMENTS_EDITION,
   SIGNAL_GROUPS,
-  SIGNAL_GROUP_LABELS,
+  signalGroupLabel,
 } from '../data/rules';
 import type { SignalGroup } from '../data/rules';
+import { t } from '../i18n';
 import { signalSpec } from '../signals/specs';
 
 /**
@@ -34,8 +34,9 @@ interface Entry {
   /** Position in the rulebook's order, 1-based; stable across filters. */
   number: string;
   group: SignalGroup;
-  label: string;
-  description: string;
+  /** Read through the source's getters, so the words follow the language. */
+  readonly label: string;
+  readonly description: string;
   graded: boolean;
   directional: boolean;
   needsHands: boolean;
@@ -51,8 +52,12 @@ const ENTRIES: readonly Entry[] = SIGNAL_GROUPS.flatMap(({ id, group }, index) =
       id,
       number: String(index + 1).padStart(2, '0'),
       group,
-      label: source.label,
-      description: source.description,
+      get label() {
+        return source.label;
+      },
+      get description() {
+        return source.description;
+      },
       graded: spec !== undefined,
       directional: spec?.directional ?? false,
       needsHands: spec?.needsHands ?? false,
@@ -70,10 +75,10 @@ export default function Reference() {
 
   return (
     <div className="flex h-full flex-col lg:flex-row">
-      <h1 className="sr-only">Learn</h1>
+      <h1 className="sr-only">{t('reference.title')}</h1>
 
       <section
-        aria-label="Selected signal"
+        aria-label={t('reference.selected')}
         className="flex shrink-0 flex-col justify-between gap-6 border-b border-line p-5 sm:p-8 lg:order-last lg:w-1/2 lg:border-b-0 lg:border-l"
       >
         <div key={selected.id} className="animate-rise">
@@ -82,41 +87,38 @@ export default function Reference() {
           <p className="mt-4 max-w-md text-lg text-chalk/80">{selected.description}</p>
 
           <ul className="caption mt-5 flex flex-wrap items-center gap-x-5 gap-y-2">
-            <li>{SIGNAL_GROUP_LABELS[selected.group]}</li>
+            <li>{signalGroupLabel(selected.group)}</li>
             {selected.graded ? (
               <li className="flex items-center gap-2">
                 {selected.directional ? (
                   <>
                     <span aria-hidden className="h-2.5 w-2.5 bg-lamp-red" />
                     <span aria-hidden className="h-2.5 w-2.5 bg-lamp-green" />
-                    Names a fencer
-                    <Hint align="left">
-                      The arm you use says which fencer: left arm for the fencer on your left (red),
-                      right arm for the one on your right (green).
-                    </Hint>
+                    {t('reference.namesFencer')}
+                    <Hint align="left">{t('reference.namesFencerHint')}</Hint>
                   </>
                 ) : (
-                  'Either arm'
+                  t('reference.eitherArm')
                 )}
               </li>
             ) : (
-              <li>Not graded</li>
+              <li>{t('reference.notGraded')}</li>
             )}
-            {selected.needsHands ? <li>Reads your hand</li> : null}
+            {selected.needsHands ? <li>{t('reference.readsHand')}</li> : null}
           </ul>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
           {selected.graded ? (
             <Link to={`/practice?signal=${selected.id}`} className="btn btn-go px-8 py-3 text-xl">
-              Drill {selected.label} ›
+              {t('reference.drill', { signal: selected.label })}
             </Link>
           ) : null}
           <Link to="/practice" className="btn">
-            Drill all ›
+            {t('reference.drillAll')}
           </Link>
           <details className="relative ml-auto">
-            <summary className="btn cursor-pointer list-none">Rulebook ↗</summary>
+            <summary className="btn cursor-pointer list-none">{t('reference.rulebook')}</summary>
             <ul className="absolute bottom-full right-0 z-30 mb-2 w-64 border border-line bg-panel py-1 text-sm">
               {[FIE_RULES_INDEX, ...RULE_DOCUMENTS].map((doc) => (
                 <li key={doc.id}>
@@ -128,7 +130,7 @@ export default function Reference() {
                   >
                     {doc.title}
                     {doc === FIE_RULES_INDEX ? null : (
-                      <span className="caption text-[0.65rem]">{RULE_DOCUMENTS_EDITION} · PDF</span>
+                      <span className="caption text-[0.65rem]">{t('rules.edition')} · PDF</span>
                     )}
                   </a>
                 </li>
@@ -141,7 +143,7 @@ export default function Reference() {
       <div className="flex min-h-0 flex-1 flex-col lg:w-1/2">
         <div
           role="group"
-          aria-label="Filter by group"
+          aria-label={t('reference.filter')}
           className="flex shrink-0 gap-2 overflow-x-auto border-b border-line px-3 py-2"
         >
           {(['all', ...GROUP_ORDER] as const).map((group) => (
@@ -152,7 +154,7 @@ export default function Reference() {
               aria-pressed={filter === group}
               className="btn whitespace-nowrap text-sm"
             >
-              {group === 'all' ? 'All' : SIGNAL_GROUP_LABELS[group]}
+              {group === 'all' ? t('reference.all') : signalGroupLabel(group)}
             </button>
           ))}
         </div>
@@ -161,7 +163,7 @@ export default function Reference() {
           {GROUP_ORDER.filter((group) => filter === 'all' || filter === group).map((group) => (
             <section key={group} aria-labelledby={`group-${group}`}>
               <h2 id={`group-${group}`} className="caption border-b border-line px-4 pb-2 pt-5">
-                {SIGNAL_GROUP_LABELS[group]}
+                {signalGroupLabel(group)}
               </h2>
               <ul>
                 {ENTRIES.filter((entry) => entry.group === group).map((entry) => (

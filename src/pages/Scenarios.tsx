@@ -23,6 +23,7 @@ import type { EngineState } from '../scenario/engine';
 import type { Scenario } from '../scenario/schema';
 import { getCalibratedSpecs } from '../signals/calibration';
 import type { SignalSpec } from '../signals/evaluator';
+import { t } from '../i18n';
 
 /**
  * Mode 2 — call a phrase as it happens.
@@ -52,7 +53,11 @@ const SIDE_BG = { left: 'bg-lamp-red', right: 'bg-lamp-green' } as const;
 
 function Difficulty({ level }: { level: number }) {
   return (
-    <span role="img" aria-label={`Difficulty ${level}`} className="flex shrink-0 gap-1">
+    <span
+      role="img"
+      aria-label={t('scenarios.difficulty', { n: level })}
+      className="flex shrink-0 gap-1"
+    >
       {[1, 2, 3].map((pip) => (
         <span
           key={pip}
@@ -67,11 +72,13 @@ function Difficulty({ level }: { level: number }) {
 function WeaponHint({ weapon }: { weapon: WeaponRule }) {
   const excluded = CORE_SIGNALS.filter((signal) => signal.id in weapon.excluded);
   return (
-    <Hint label={`About ${weapon.label}`} align="left">
+    <Hint label={t('scenarios.about', { weapon: weapon.label })} align="left">
       <span className="block">{weapon.target}</span>
       {excluded.length > 0 ? (
         <span className="mt-2 block text-mute">
-          Never called: {excluded.map((signal) => signal.label).join(', ')}.
+          {t('scenarios.neverCalled', {
+            signals: excluded.map((signal) => signal.label).join(', '),
+          })}
         </span>
       ) : null}
     </Hint>
@@ -169,7 +176,7 @@ export default function Scenarios() {
   if (!scenario || !engine) {
     return (
       <div className="flex min-h-full flex-col">
-        <h1 className="sr-only">Referee</h1>
+        <h1 className="sr-only">{t('scenarios.title')}</h1>
         <ul className="grid flex-1 lg:grid-cols-3">
           {WEAPON_RULES.map((weapon) => (
             <li
@@ -181,7 +188,7 @@ export default function Scenarios() {
                 <WeaponHint weapon={weapon} />
               </div>
               <p className="caption mt-2">
-                {weapon.rightOfWay ? 'Right of way' : 'No right of way'}
+                {weapon.rightOfWay ? t('scenarios.rightOfWay') : t('scenarios.noRightOfWay')}
               </p>
 
               <ul className="mt-8 border-t border-line">
@@ -215,19 +222,16 @@ export default function Scenarios() {
 
   return (
     <div className="relative flex h-full min-h-[28rem] flex-col">
-      <h1 className="sr-only">Referee</h1>
+      <h1 className="sr-only">{t('scenarios.title')}</h1>
 
       <div className="flex shrink-0 items-center gap-3 border-b border-line px-3 py-2">
         <button type="button" onClick={backToBank} className="btn">
-          ‹ Phrases
+          {t('scenarios.phrases')}
         </button>
         <h2 className="display min-w-0 truncate text-2xl">{scenario.title}</h2>
         <span className="caption hidden sm:inline">{weaponRule(scenario.weapon).label}</span>
         <Difficulty level={scenario.difficulty} />
-        <Hint className="ml-auto">
-          Frame yourself, then play the phrase. You get five seconds to set. Every signal you hold
-          is captured until you submit, replays included.
-        </Hint>
+        <Hint className="ml-auto">{t('scenarios.hint')}</Hint>
       </div>
 
       <div className="relative min-h-0 flex-1">
@@ -249,26 +253,28 @@ export default function Scenarios() {
                     className="h-14 w-14 shrink-0"
                   />
                   <p className="display text-3xl sm:text-4xl">
-                    {heldLabel ?? <span className="text-mute">No signal yet</span>}
+                    {heldLabel ?? <span className="text-mute">{t('scenarios.noSignal')}</span>}
                   </p>
                 </div>
 
                 {engine.calls.length === 0 ? (
-                  <p className="hud caption px-3 py-1.5">No calls yet</p>
+                  <p className="hud caption px-3 py-1.5">{t('scenarios.noCalls')}</p>
                 ) : (
-                  <ol aria-label="Calls so far" className="flex flex-wrap gap-1.5">
+                  <ol aria-label={t('scenarios.callsSoFar')} className="flex flex-wrap gap-1.5">
                     {engine.calls.map((call, index) => (
                       <li key={index} className="hud flex items-center gap-2 px-2.5 py-1.5">
                         <span className="caption tabular-nums">{index + 1}</span>
                         {directional(call.signal) ? (
                           <span
                             role="img"
-                            aria-label={`${call.side} arm`}
+                            aria-label={t(`side.arm.${call.side}`)}
                             className={`h-2.5 w-2.5 ${SIDE_BG[call.side]}`}
                           />
                         ) : null}
                         <span className="display text-xl">{call.label}</span>
-                        {call.outcome === 'quick' ? <span className="caption">quick</span> : null}
+                        {call.outcome === 'quick' ? (
+                          <span className="caption">{t('scenarios.quick')}</span>
+                        ) : null}
                       </li>
                     ))}
                   </ol>
@@ -286,10 +292,10 @@ export default function Scenarios() {
                 disabled={engine.calls.length === 0}
                 className="btn"
               >
-                Undo last call
+                {t('scenarios.undo')}
               </button>
               <button type="button" onClick={submit} className="btn btn-go">
-                Submit call
+                {t('scenarios.submit')}
               </button>
             </>
           ) : null}
@@ -324,7 +330,7 @@ export default function Scenarios() {
           >
             {engine.phase === 'countdown' ? (
               <span role="status" className="caption text-chalk">
-                Starts in {Math.ceil(engine.countdownRemainingMs / 1000)}…
+                {t('common.startsIn', { n: Math.ceil(engine.countdownRemainingMs / 1000) })}
               </span>
             ) : null}
           </CameraStage>

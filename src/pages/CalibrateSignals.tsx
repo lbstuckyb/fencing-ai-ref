@@ -14,6 +14,7 @@ import {
   recordCalibration,
   saveCalibrationStore,
 } from '../signals/calibration';
+import { t } from '../i18n';
 import type { CalibrationStore, SignalCalibration } from '../signals/calibration';
 import { calibratedBand } from '../signals/calibration';
 import { formatBand, resolve } from '../signals/evaluator';
@@ -106,10 +107,10 @@ function ReviewTable({ spec, calibration }: { spec: SignalSpec; calibration: Sig
       <table className="w-full min-w-md border-collapse text-left text-sm">
         <thead>
           <tr className="border-b border-line text-xs uppercase tracking-wide text-mute">
-            <th className="py-2 pr-4 font-medium">Measurement</th>
-            <th className="py-2 pr-4 font-medium">You recorded</th>
-            <th className="py-2 pr-4 font-medium">Default band</th>
-            <th className="py-2 pr-4 font-medium">New band</th>
+            <th className="py-2 pr-4 font-medium">{t('calibrateSignals.measurement')}</th>
+            <th className="py-2 pr-4 font-medium">{t('calibrateSignals.youRecorded')}</th>
+            <th className="py-2 pr-4 font-medium">{t('calibrateSignals.defaultBand')}</th>
+            <th className="py-2 pr-4 font-medium">{t('calibrateSignals.newBand')}</th>
           </tr>
         </thead>
         <tbody className="font-mono">
@@ -117,7 +118,7 @@ function ReviewTable({ spec, calibration }: { spec: SignalSpec; calibration: Sig
             <tr key={row.key} className="border-b border-line">
               <th scope="row" className="py-2 pr-4 font-sans font-normal">
                 {row.label}
-                {row.side ? ` (${row.side})` : ''}
+                {row.side ? ` (${t(`side.arm.${row.side}`)})` : ''}
               </th>
               <td className="py-2 pr-4">{row.recordedText}</td>
               <td className="py-2 pr-4 text-mute">{row.defaultBandText}</td>
@@ -130,8 +131,9 @@ function ReviewTable({ spec, calibration }: { spec: SignalSpec; calibration: Sig
       </table>
       {skipped > 0 ? (
         <p className="mt-2 text-sm text-mute">
-          {skipped} more constraint{skipped === 1 ? '' : 's'} — hand shape or arm symmetry — not
-          shown here: neither is a band a recording can widen.
+          {t(skipped === 1 ? 'calibrateSignals.skippedOne' : 'calibrateSignals.skippedMany', {
+            n: skipped,
+          })}
         </p>
       ) : null}
     </div>
@@ -314,7 +316,7 @@ export default function CalibrateSignals() {
             <SignalCard spec={spec} selected={spec === selectedSpec} onSelect={selectSignal} />
             <div className="flex items-center justify-between px-4 pb-1 text-xs">
               <span className={calibrated ? 'text-chalk' : 'text-mute'}>
-                {calibrated ? 'Using your recording' : 'Using default band'}
+                {calibrated ? t('calibrateSignals.usingYours') : t('calibrateSignals.usingDefault')}
               </span>
               {calibrated ? (
                 <button
@@ -322,7 +324,7 @@ export default function CalibrateSignals() {
                   onClick={() => resetSignal(spec.id)}
                   className="text-mute underline hover:no-underline"
                 >
-                  Reset to default
+                  {t('calibrateSignals.reset')}
                 </button>
               ) : null}
             </div>
@@ -336,11 +338,8 @@ export default function CalibrateSignals() {
     <div className="mx-auto max-w-6xl p-5 sm:p-8">
       <ToolTabs />
       <div className="mb-6 flex items-center gap-3">
-        <h1 className="display text-5xl">Expert calibration</h1>
-        <Hint align="left">
-          Record yourself making each signal correctly. Drills then grade against your recording
-          instead of the default. A new take replaces the old one; reset brings the default back.
-        </Hint>
+        <h1 className="display text-5xl">{t('calibrateSignals.title')}</h1>
+        <Hint align="left">{t('calibrateSignals.hint')}</Hint>
       </div>
 
       <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
@@ -351,7 +350,7 @@ export default function CalibrateSignals() {
 
         {!twoArmed ? (
           <div className="flex items-center gap-2">
-            <span className="caption">Arm</span>
+            <span className="caption">{t('calibrateSignals.arm')}</span>
             {(['right', 'left'] as const).map((side) => (
               <button
                 key={side}
@@ -361,12 +360,12 @@ export default function CalibrateSignals() {
                 disabled={busy}
                 className="btn"
               >
-                {side === 'right' ? 'Right arm' : 'Left arm'}
+                {side === 'right' ? t('calibrateSignals.rightArm') : t('calibrateSignals.leftArm')}
               </button>
             ))}
           </div>
         ) : (
-          <p className="caption">Both arms</p>
+          <p className="caption">{t('calibrateSignals.bothArms')}</p>
         )}
       </div>
 
@@ -383,7 +382,9 @@ export default function CalibrateSignals() {
             </div>
           ) : record.phase === 'recording' ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-              <p className="caption bg-chalk px-3 py-1.5 text-ink">Recording</p>
+              <p className="caption bg-chalk px-3 py-1.5 text-ink">
+                {t('calibrateSignals.recording')}
+              </p>
               <p aria-hidden className="display text-8xl">
                 {((RECORD_MS - record.elapsedMs) / 1000).toFixed(1)}s
               </p>
@@ -395,30 +396,34 @@ export default function CalibrateSignals() {
           <>
             <span role="status" className="caption text-chalk">
               {record.phase === 'countdown'
-                ? `Starts in ${Math.ceil(record.remainingMs / 1000)}…`
-                : `Recording… ${(record.elapsedMs / 1000).toFixed(1)} s`}
+                ? t('common.startsIn', { n: Math.ceil(record.remainingMs / 1000) })
+                : t('common.recordingFor', { s: (record.elapsedMs / 1000).toFixed(1) })}
             </span>
             <button type="button" onClick={cancelRecording} className="btn">
-              Cancel
+              {t('common.cancel')}
             </button>
           </>
         ) : (
           <button type="button" onClick={startRecording} className="btn btn-go">
-            Record {RECORD_MS / 1000} s
+            {t('common.recordSeconds', { s: RECORD_MS / 1000 })}
           </button>
         )}
       </CameraStage>
 
       {record.phase === 'review' ? (
         <div className="mt-3 border border-line bg-panel p-3">
-          <p className="caption">Recorded with your {record.calibration.side} arm</p>
+          <p className="caption">
+            {t('calibrateSignals.recordedWith', {
+              arm: t(`side.yourArm.${record.calibration.side}`),
+            })}
+          </p>
           <ReviewTable spec={selectedSpec} calibration={record.calibration} />
           <div className="mt-3 flex gap-2">
             <button type="button" onClick={save} className="btn btn-go">
-              Save
+              {t('calibrateSignals.save')}
             </button>
             <button type="button" onClick={retake} className="btn">
-              Retake
+              {t('calibrateSignals.retake')}
             </button>
           </div>
         </div>
@@ -427,18 +432,15 @@ export default function CalibrateSignals() {
       <section aria-labelledby="calibration-picker" className="mt-10">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 id="calibration-picker" className="caption flex items-center gap-2">
-            The core ten
-            <Hint align="left">
-              Pick a signal to record it. Export saves every recording on this device to a file;
-              import loads one back in, on top of what is already saved.
-            </Hint>
+            {t('calibrateSignals.coreTen')}
+            <Hint align="left">{t('calibrateSignals.coreTenHint')}</Hint>
           </h2>
           <div className="flex gap-2">
             <button type="button" onClick={exportStore} className="btn">
-              Export recordings
+              {t('calibrateSignals.export')}
             </button>
             <button type="button" onClick={triggerImport} className="btn">
-              Import recordings
+              {t('calibrateSignals.import')}
             </button>
             <input
               ref={fileInputRef}

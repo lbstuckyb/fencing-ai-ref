@@ -62,6 +62,7 @@
  */
 
 import type { Side } from '../cv/types';
+import { t } from '../i18n';
 import type { Stability } from './evaluator';
 
 /* -------------------------------------------------------------------------- */
@@ -218,10 +219,7 @@ function seconds(ms: number): string {
 }
 
 function tooQuick(heldMs: number, [min, max]: readonly [number, number]): string {
-  return (
-    `Held for ${seconds(heldMs)} s — too quick: a signal must last ` +
-    `${seconds(min)}–${seconds(max)} seconds and be expressive.`
-  );
+  return t('coaching.tooQuick', { held: seconds(heldMs), min: seconds(min), max: seconds(max) });
 }
 
 /**

@@ -11,6 +11,7 @@ import {
   measure,
   sidedId,
 } from '../cv/measurements';
+import { t } from '../i18n';
 import { createRecorder } from '../cv/recording';
 import type { HandFrame, PoseFrame, Side } from '../cv/types';
 import type { MeasurementGroup, MeasurementRow, Measurements } from '../cv/measurements';
@@ -54,7 +55,7 @@ type RecordPhase =
   | { phase: 'done'; recording: Recording };
 
 function formatSummary(summary: Summary | null | undefined, row: MeasurementRow): string {
-  if (!summary) return 'no samples';
+  if (!summary) return t('calibrate.noSamples');
   const value = (n: number) => formatMeasurement(n, row.unit);
   return `${value(summary.min)} · ${value(summary.median)} · ${value(summary.max)}`;
 }
@@ -94,10 +95,10 @@ function GroupTable({ group, measurements, recording }: GroupTableProps) {
         <table className="w-full min-w-md border-collapse text-left text-base">
           <thead>
             <tr className="border-b border-line text-sm uppercase tracking-wide text-mute">
-              <th className="py-2 pr-4 font-medium">Measurement</th>
+              <th className="py-2 pr-4 font-medium">{t('calibrate.measurement')}</th>
               {COLUMNS.map((side) => (
                 <th key={side} className="py-2 pr-4 font-medium">
-                  your {side}
+                  {t(`side.yourSide.${side}`)}
                 </th>
               ))}
             </tr>
@@ -144,9 +145,11 @@ function GroupTable({ group, measurements, recording }: GroupTableProps) {
 
       {group.id === 'hand' ? (
         <p className="mt-2 text-sm text-mute">
-          {`Classified shape — ${COLUMNS.map(
-            (side) => `your ${side}: ${formatShape(measurements.shapes[side])}`
-          ).join(' · ')}`}
+          {t('calibrate.classified', {
+            shapes: COLUMNS.map(
+              (side) => `${t(`side.yourSide.${side}`)}: ${formatShape(measurements.shapes[side])}`
+            ).join(' · '),
+          })}
         </p>
       ) : null}
     </section>
@@ -219,18 +222,15 @@ export default function Calibrate() {
     <div className="mx-auto max-w-6xl p-5 sm:p-8">
       <ToolTabs />
       <div className="mb-4 flex items-center gap-3">
-        <h1 className="display text-5xl">Calibrate</h1>
-        <Hint align="left">
-          Live readouts of every quantity the signal specs use. Perform a signal, record the hold,
-          and write the measured numbers into the spec.
-        </Hint>
+        <h1 className="display text-5xl">{t('calibrate.title')}</h1>
+        <Hint align="left">{t('calibrate.hint')}</Hint>
       </div>
 
       <CameraStage onFrame={onFrame} onRunningChange={onRunningChange} needsHands>
         {record.phase === 'recording' ? (
           <>
             <span role="status" className="caption bg-chalk px-3 py-2 text-ink">
-              Recording… {(record.elapsedMs / 1000).toFixed(1)} s
+              {t('common.recordingFor', { s: (record.elapsedMs / 1000).toFixed(1) })}
             </span>
             {/*
               The clock only advances on frames that produced a pose, so a
@@ -238,28 +238,28 @@ export default function Calibrate() {
               forever with no way out but stopping the camera.
             */}
             <button type="button" onClick={clearRecording} className="btn">
-              Cancel
+              {t('common.cancel')}
             </button>
           </>
         ) : (
           <button type="button" onClick={startRecording} className="btn btn-go">
-            Record {RECORD_MS / 1000} s
+            {t('common.recordSeconds', { s: RECORD_MS / 1000 })}
           </button>
         )}
         {recording ? (
           <button type="button" onClick={clearRecording} className="btn">
-            Clear recording
+            {t('calibrate.clear')}
           </button>
         ) : null}
       </CameraStage>
 
       {recording ? (
         <p role="status" className="caption mt-3 flex items-center gap-2 text-chalk">
-          Recorded {recording.frames} frames over {(recording.durationMs / 1000).toFixed(1)} s
-          <Hint align="left">
-            The smaller line in each cell is min · median · max across the hold. Take the median as
-            the centre of a band and the spread as the tolerance it needs.
-          </Hint>
+          {t('calibrate.recorded', {
+            frames: recording.frames,
+            s: (recording.durationMs / 1000).toFixed(1),
+          })}
+          <Hint align="left">{t('calibrate.recordedHint')}</Hint>
         </p>
       ) : null}
 

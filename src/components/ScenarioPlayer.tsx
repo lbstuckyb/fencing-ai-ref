@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { ReactNode, Ref } from 'react';
 import Hint from './Hint';
+import { t } from '../i18n';
 
 /**
  * The clip half of Mode 2: a phrase with the controls a referee actually wants
@@ -112,11 +113,11 @@ export default function ScenarioPlayer({
             role="alert"
             className="absolute inset-0 flex items-center justify-center gap-3 p-6 text-center"
           >
-            <p className="display text-3xl text-mute">Clip unavailable</p>
+            <p className="display text-3xl text-mute">{t('player.unavailable')}</p>
             <Hint placement="above">
-              Placeholder clips are generated, not committed. Run{' '}
-              <code>npm run make-scenarios</code> (needs ffmpeg), or drop a clip at{' '}
-              <code>public{src}</code>. You can still make and grade the call.
+              {t('player.unavailableHint1')} <code>npm run make-scenarios</code>{' '}
+              {t('player.unavailableHint2')} <code>public{src}</code>
+              {t('player.unavailableHint3')}
             </Hint>
           </div>
         ) : (
@@ -147,17 +148,17 @@ export default function ScenarioPlayer({
         {armed ? (
           <>
             <button type="button" onClick={togglePlay} disabled={missing} className="btn">
-              {playing ? 'Pause' : 'Play'}
+              {playing ? t('player.pause') : t('player.play')}
             </button>
             <button type="button" onClick={replay} disabled={missing} className="btn">
-              Replay
+              {t('player.replay')}
             </button>
             <button
               type="button"
               onClick={() => step(-FRAME_STEP_S)}
               disabled={missing}
               className="btn"
-              aria-label="Step back one frame"
+              aria-label={t('player.stepBack')}
             >
               ◀
             </button>
@@ -166,7 +167,7 @@ export default function ScenarioPlayer({
               onClick={() => step(FRAME_STEP_S)}
               disabled={missing}
               className="btn"
-              aria-label="Step forward one frame"
+              aria-label={t('player.stepForward')}
             >
               ▶
             </button>
@@ -175,20 +176,20 @@ export default function ScenarioPlayer({
               onClick={() => setSlow((value) => !value)}
               disabled={missing}
               aria-pressed={slow}
-              aria-label="Slow motion"
+              aria-label={t('player.slowMotion')}
               className="btn"
             >
-              Slow
+              {t('player.slow')}
             </button>
-            {ended ? <span className="caption">Clip ended · still capturing</span> : null}
+            {ended ? <span className="caption">{t('player.ended')}</span> : null}
             {children}
           </>
         ) : (
           <>
             <button type="button" onClick={onArm} disabled={!canArm} className="btn btn-go">
-              {missing ? 'Get ready to call' : 'Play the phrase'}
+              {missing ? t('player.getReady') : t('player.playPhrase')}
             </button>
-            {canArm ? null : <span className="caption">Waiting for camera</span>}
+            {canArm ? null : <span className="caption">{t('player.waiting')}</span>}
           </>
         )}
       </div>

@@ -15,4 +15,16 @@ export const EPEE_001: Scenario = {
   expect: [{ signal: 'double_hit', side: null, say: ['hit for each', 'double touch'] }],
   explanation:
     'No priority in épée: both lights land within the lockout window, so it is a hit for each fencer.',
+  translations: {
+    es: {
+      title: 'Dos luces, dentro del bloqueo',
+      explanation:
+        'En espada no hay prioridad: las dos luces se encienden dentro del tiempo de bloqueo, así que es un tocado para cada tirador.',
+    },
+    fr: {
+      title: 'Deux lampes, dans le temps de blocage',
+      explanation:
+        'Pas de convention à l’épée : les deux lampes s’allument dans le temps de blocage, c’est donc une touche à chacun.',
+    },
+  },
 };

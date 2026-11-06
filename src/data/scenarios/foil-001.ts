@@ -20,4 +20,16 @@ export const FOIL_001: Scenario = {
   ],
   explanation:
     'The attack from the right has priority; left parries it and the riposte lands. The touch is left’s.',
+  translations: {
+    es: {
+      title: 'Ataque derecha, parada-respuesta izquierda',
+      explanation:
+        'El ataque de la derecha tiene prioridad; la izquierda lo para y la respuesta llega. El tocado es de la izquierda.',
+    },
+    fr: {
+      title: 'Attaque à droite, parade-riposte à gauche',
+      explanation:
+        'L’attaque de droite a la priorité ; la gauche la pare et la riposte arrive. La touche est pour la gauche.',
+    },
+  },
 };

@@ -45,6 +45,7 @@ import {
 } from '../cv/measurements';
 import type { MeasurementInfo, MeasurementUnit, Measurements } from '../cv/measurements';
 import { otherSide } from '../cv/types';
+import { capitalize, t, tx } from '../i18n';
 import type { HandShape, Side } from '../cv/types';
 
 /* -------------------------------------------------------------------------- */
@@ -361,7 +362,7 @@ function toleranceFor(constraint: ConstraintBase, unit: MeasurementUnit): number
 }
 
 function sideWord(side: Side | null): string {
-  return side === null ? '' : ` (${side} arm)`;
+  return side === null ? '' : t('coaching.sideWord', { arm: t(`side.arm.${side}`) });
 }
 
 /** The band in words, in the measurement's own unit. */
@@ -369,9 +370,9 @@ export function formatBand([min, max]: Band, unit: MeasurementUnit): string {
   const low = min === null ? null : formatMeasurement(min, unit);
   const high = max === null ? null : formatMeasurement(max, unit);
   if (low !== null && high !== null) return `${low}–${high}`;
-  if (low !== null) return `at least ${low}`;
-  if (high !== null) return `at most ${high}`;
-  return 'any value';
+  if (low !== null) return t('coaching.atLeast', { n: low });
+  if (high !== null) return t('coaching.atMost', { n: high });
+  return t('coaching.anyValue');
 }
 
 function failed(
@@ -388,7 +389,13 @@ function failed(
     value,
     pass: false,
     score,
-    reason: { code, measure, message: constraint.feedback ?? generated, score },
+    // `feedback` is a dictionary key in the authored specs; plain text passes through.
+    reason: {
+      code,
+      measure,
+      message: constraint.feedback ? tx(constraint.feedback) : generated,
+      score,
+    },
   };
 }
 
@@ -412,7 +419,7 @@ function checkRange(
       null,
       0,
       'unmeasured',
-      `${info.label}${sideWord(info.side)} could not be measured — make sure your whole upper body is in frame.`
+      t('coaching.unmeasured', { label: info.label, side: sideWord(info.side) })
     );
   }
 
@@ -425,7 +432,12 @@ function checkRange(
     value,
     bandScore(value, band, toleranceFor(constraint, info.unit)),
     'out_of_range',
-    `${info.label}${sideWord(info.side)}: ${formatMeasurement(value, info.unit)} — expected ${formatBand(band, info.unit)}.`
+    t('coaching.outOfRange', {
+      label: info.label,
+      side: sideWord(info.side),
+      value: formatMeasurement(value, info.unit),
+      band: formatBand(band, info.unit),
+    })
   );
 }
 
@@ -443,7 +455,7 @@ function checkHand(constraint: HandConstraint, measurements: Measurements, side:
       null,
       0,
       'unmeasured',
-      `Your ${specSide} hand was not detected — hold it where the camera can see it.`
+      capitalize(t('coaching.handMissing', { hand: t(`side.yourHand.${specSide}`) }))
     );
   }
   if (shape === constraint.shape) return passed(constraint, measure, null);
@@ -454,7 +466,13 @@ function checkHand(constraint: HandConstraint, measurements: Measurements, side:
     null,
     0,
     'wrong_shape',
-    `Your ${specSide} hand reads as ${formatShape(shape)} — this signal needs ${formatShape(constraint.shape)}.`
+    capitalize(
+      t('coaching.wrongShape', {
+        hand: t(`side.yourHand.${specSide}`),
+        shape: formatShape(shape),
+        expected: formatShape(constraint.shape),
+      })
+    )
   );
 }
 
@@ -470,7 +488,7 @@ function checkSymmetry(constraint: SymmetryConstraint, values: Measurements['val
       null,
       0,
       'unmeasured',
-      `${info.label} could not be measured on both arms — make sure both are in frame.`
+      t('coaching.symmetryUnmeasured', { label: info.label })
     );
   }
 
@@ -483,7 +501,10 @@ function checkSymmetry(constraint: SymmetryConstraint, values: Measurements['val
     delta,
     bandScore(delta, [null, constraint.maxDelta], toleranceFor(constraint, info.unit)),
     'asymmetric',
-    `Your arms differ by ${formatMeasurement(delta, info.unit)} in ${info.label.toLowerCase()} — this signal needs them level.`
+    t('coaching.asymmetric', {
+      delta: formatMeasurement(delta, info.unit),
+      label: info.label.toLowerCase(),
+    })
   );
 }
 

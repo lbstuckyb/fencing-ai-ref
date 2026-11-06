@@ -1,13 +1,14 @@
 import { Link } from 'react-router-dom';
 import { SIGNAL_GROUPS, WEAPON_RULES } from '../data/rules';
 import { STEPS } from '../nav';
+import { t } from '../i18n';
 
 /** One screen: the two lamps, one line, and the way in. */
 export default function Home() {
   const figures = [
-    { value: `${SIGNAL_GROUPS.length}`, label: 'Signals' },
-    { value: '1–2 s', label: 'Hold' },
-    { value: `${WEAPON_RULES.length}`, label: 'Weapons' },
+    { value: `${SIGNAL_GROUPS.length}`, label: t('home.signals') },
+    { value: '1–2 s', label: t('home.hold') },
+    { value: `${WEAPON_RULES.length}`, label: t('home.weapons') },
   ];
 
   return (
@@ -28,12 +29,12 @@ export default function Home() {
 
       <div className="relative animate-rise">
         <h1 className="display text-[clamp(4.5rem,15vw,14rem)]">
-          Make
+          {t('home.title1')}
           <br />
-          the call.
+          {t('home.title2')}
         </h1>
         <Link to={STEPS[0].path} className="btn btn-go mt-8 px-10 py-4 text-2xl">
-          Enter ›
+          {t('home.enter')}
         </Link>
       </div>
 

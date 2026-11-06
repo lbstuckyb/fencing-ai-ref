@@ -1,12 +1,56 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { LANGS, setLang, t, tx, useLang } from '../i18n';
+import type { Lang } from '../i18n';
 import { STEPS, TOOLS } from '../nav';
-import { SIGNAL_ARTICLE } from '../data/rules';
-import Hint from './Hint';
 
 function stepClass({ isActive }: { isActive: boolean }) {
-  return `focusable flex items-baseline gap-1.5 border-b-2 px-1 py-1 font-display text-base font-bold uppercase tracking-widest sm:text-lg transition-colors ${
+  return `focusable flex items-baseline gap-1.5 border-b-2 px-1 py-1 font-display text-sm font-bold uppercase tracking-wider sm:text-lg sm:tracking-widest transition-colors ${
     isActive ? 'border-chalk text-chalk' : 'border-transparent text-mute hover:text-chalk'
   }`;
+}
+
+/**
+ * EN · ES · FR — the current one lit, the others a click away. On a phone the
+ * bar has no room for three buttons, so it is one native picker there.
+ */
+function LanguageSelector() {
+  const lang = useLang();
+  const label = t('lang.selector');
+  const text = 'font-display text-sm font-bold uppercase tracking-widest';
+  return (
+    <>
+      <select
+        aria-label={label}
+        value={lang}
+        onChange={(event) => setLang(event.target.value as Lang)}
+        className={`focusable cursor-pointer appearance-none bg-transparent text-chalk sm:hidden ${text}`}
+      >
+        {LANGS.map((code) => (
+          <option key={code} value={code} className="bg-ink">
+            {code.toUpperCase()}
+          </option>
+        ))}
+      </select>
+
+      <div role="group" aria-label={label} className="hidden items-center gap-1.5 sm:flex">
+        {LANGS.map((code) => (
+          <button
+            key={code}
+            type="button"
+            lang={code}
+            onClick={() => setLang(code)}
+            aria-pressed={code === lang}
+            title={tx(`lang.names.${code}`)}
+            className={`focusable transition-colors ${text} ${
+              code === lang ? 'text-chalk' : 'text-mute hover:text-chalk'
+            }`}
+          >
+            {code}
+          </button>
+        ))}
+      </div>
+    </>
+  );
 }
 
 /**
@@ -16,6 +60,9 @@ function stepClass({ isActive }: { isActive: boolean }) {
  */
 export default function Layout() {
   const { pathname } = useLocation();
+  // Read here so the whole frame re-renders, and keys the page below so it
+  // re-mounts in the new language: page text is read with plain `t()` calls.
+  const lang = useLang();
   const tuning = TOOLS.some((tool) => tool.path === pathname);
 
   return (
@@ -24,21 +71,17 @@ export default function Layout() {
         href="#main"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:bg-chalk focus:px-3 focus:py-2 focus:text-sm focus:text-ink"
       >
-        Skip to content
+        {t('nav.skip')}
       </a>
 
       <header className="flex shrink-0 items-center gap-x-3 border-b border-line px-3 py-2 sm:gap-x-8 sm:px-5">
-        <NavLink
-          to="/"
-          aria-label="Fencing Referee Trainer"
-          className="focusable flex items-center gap-2"
-        >
+        <NavLink to="/" aria-label={t('nav.brand')} className="focusable flex items-center gap-2">
           <span aria-hidden className="h-3 w-3 bg-lamp-red" />
           <span aria-hidden className="h-3 w-3 bg-lamp-green" />
-          <span className="display hidden pl-1 text-xl sm:inline">Referee</span>
+          <span className="display hidden pl-1 text-xl sm:inline">{t('nav.brandShort')}</span>
         </NavLink>
 
-        <nav aria-label="Main" className="flex flex-1 items-center gap-3 sm:gap-6">
+        <nav aria-label={t('nav.main')} className="flex flex-1 items-center gap-3 sm:gap-6">
           {STEPS.map((step) => (
             <NavLink key={step.path} to={step.path} className={stepClass}>
               <span aria-hidden className="hidden text-xs text-mute sm:inline">
@@ -51,7 +94,7 @@ export default function Layout() {
 
         <NavLink
           to={TOOLS[0].path}
-          aria-label="Tuning"
+          aria-label={t('nav.tuning')}
           className={`focusable flex h-6 w-6 items-center justify-center transition-colors ${
             tuning ? 'text-chalk' : 'text-mute hover:text-chalk'
           }`}
@@ -72,13 +115,31 @@ export default function Layout() {
           </svg>
         </NavLink>
 
-        <Hint label="About">
-          Runs on your device. No video leaves the browser. Graded against FIE Technical Rules,
-          Article {SIGNAL_ARTICLE.article}.
-        </Hint>
+        <NavLink
+          to="/about"
+          aria-label={t('nav.about')}
+          className={({ isActive }) =>
+            `focusable font-display text-sm font-bold uppercase tracking-widest transition-colors ${
+              isActive ? 'text-chalk' : 'text-mute hover:text-chalk'
+            }`
+          }
+        >
+          {/* Words where there is room; on a phone, an "i" in the same type. */}
+          <span aria-hidden className="hidden sm:inline">
+            {t('nav.about')}
+          </span>
+          <span
+            aria-hidden
+            className="flex h-5 w-5 items-center justify-center border border-current text-xs normal-case sm:hidden"
+          >
+            i
+          </span>
+        </NavLink>
+
+        <LanguageSelector />
       </header>
 
-      <main id="main" className="relative min-h-0 flex-1 overflow-y-auto">
+      <main key={lang} id="main" className="relative min-h-0 flex-1 overflow-y-auto">
         <Outlet />
       </main>
     </div>

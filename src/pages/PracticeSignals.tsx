@@ -18,6 +18,7 @@ import {
 import type { DrillState } from '../signals/drill';
 import { getCalibratedSpec, getCalibratedSpecs } from '../signals/calibration';
 import type { SignalSpec } from '../signals/evaluator';
+import { t } from '../i18n';
 
 /**
  * Mode 1 — the signal practice drill, and the app's first shippable half.
@@ -126,10 +127,10 @@ export default function PracticeSignals() {
 
   const armLine = prompt.side ? (
     <span className={prompt.side === 'left' ? 'text-lamp-red' : 'text-lamp-green'}>
-      {prompt.side} arm
+      {t(`side.arm.${prompt.side}`)}
     </span>
   ) : (
-    <span className="text-mute">either arm</span>
+    <span className="text-mute">{t('common.eitherArm')}</span>
   );
 
   const lastPass = attempt?.outcome === 'pass' ? attempt : null;
@@ -185,14 +186,14 @@ export default function PracticeSignals() {
 
   return (
     <div className="relative h-full min-h-[26rem]">
-      <h1 className="sr-only">Drill</h1>
+      <h1 className="sr-only">{t('practice.title')}</h1>
 
       {/* Outside the camera overlay: the score is the user's, camera on or off. */}
       <dl className="hud pointer-events-none absolute right-2 top-2 z-10 flex gap-4 px-3 py-2 text-center">
         {[
-          { label: 'Streak', value: `${drill.streak}` },
-          { label: 'Best', value: `${drill.bestStreak}` },
-          { label: 'Score', value: `${drill.passes}/${drill.attempts}` },
+          { label: t('practice.streak'), value: `${drill.streak}` },
+          { label: t('practice.best'), value: `${drill.bestStreak}` },
+          { label: t('practice.score'), value: `${drill.passes}/${drill.attempts}` },
         ].map(({ label, value }, index) => (
           <div key={label} className={index === 0 ? '' : 'hidden sm:block'}>
             {/*
@@ -227,19 +228,19 @@ export default function PracticeSignals() {
           aria-expanded={pickerOpen}
           className="btn"
         >
-          ‹ Signals
+          {t('practice.signals')}
         </button>
         <Hint align="left" placement="above">
           {drill.mode === 'random'
-            ? 'Random order. Lower your arms after each signal to get the next. Pick one to stay on it.'
-            : `Staying on ${prompt.spec.label}. Next signal goes back to random.`}
+            ? t('practice.hintRandom')
+            : t('practice.hintPinned', { signal: prompt.spec.label })}
         </Hint>
         <span className="ml-auto" />
         <button type="button" onClick={skip} className="btn">
-          Next signal ›
+          {t('practice.next')}
         </button>
         <Link to="/scenarios" className="btn btn-go">
-          Referee ›
+          {t('practice.referee')}
         </Link>
       </CameraStage>
 
@@ -250,10 +251,10 @@ export default function PracticeSignals() {
         >
           <div className="flex items-center justify-between border-b border-line px-3 py-2">
             <h2 id="signal-picker" className="caption">
-              Drill one signal
+              {t('practice.pickOne')}
             </h2>
             <button type="button" onClick={() => setPickerOpen(false)} className="btn">
-              Close
+              {t('practice.close')}
             </button>
           </div>
           <ul className="min-h-0 flex-1 overflow-y-auto py-1">{picker}</ul>
